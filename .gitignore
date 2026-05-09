@@ -141,3 +141,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# TubeMato Specifics
+dist-electron/
+release/
+build/
+
+# OS Specific
+.DS_Store
+Thumbs.db

@@ -1,0 +1,199 @@
+/* ─── Timer View Layout ──────────────────────────────────────────────────────── */
+.timer-view {
+  display: flex;
+  gap: var(--sp-8);
+  height: 100%;
+  align-items: flex-start;
+}
+
+.timer-main {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-5);
+  padding-top: var(--sp-4);
+  min-width: 320px;
+}
+
+.timer-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-width: 400px;
+}
+
+/* ─── Ring ───────────────────────────────────────────────────────────────────── */
+.timer-ring-wrapper {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circular-progress {
+  position: absolute;
+  inset: 0;
+}
+
+.timer-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.timer-countdown {
+  font-size: 56px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+/* ─── Session dots ───────────────────────────────────────────────────────────── */
+.session-dots {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.session-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--bg-overlay);
+  border: 1.5px solid var(--border-hover);
+  transition: all var(--dur-base) var(--ease);
+}
+
+.session-dot--filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+/* ─── Controls ───────────────────────────────────────────────────────────────── */
+.timer-controls {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-lg {
+  padding: var(--sp-3) var(--sp-6);
+  font-size: 15px;
+  border-radius: var(--r-lg);
+}
+
+.timer-task-selector {
+  width: 280px;
+}
+
+.task-selector {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239898b0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* ─── Grace overlay ──────────────────────────────────────────────────────────── */
+.grace-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+}
+
+.grace-overlay__label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.grace-overlay__countdown {
+  font-size: 52px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--danger);
+  line-height: 1;
+}
+
+.grace-overlay__actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-direction: column;
+  width: 100%;
+}
+
+/* ─── YouTube Panel ──────────────────────────────────────────────────────────── */
+.yt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  transition: all var(--dur-base) var(--ease);
+}
+
+.yt-panel--collapsed { gap: 0; }
+
+.yt-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.yt-panel__icon { font-size: 12px; color: var(--accent); }
+
+.yt-panel__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yt-panel__container {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: var(--bg-base);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.yt-panel__container iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.yt-panel__controls {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.yt-panel__error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  color: var(--danger);
+  line-height: 1.4;
+}

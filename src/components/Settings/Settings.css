@@ -1,0 +1,104 @@
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  max-width: 640px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.settings-section__title {
+  padding: var(--sp-3) var(--sp-5);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--dur-fast) var(--ease);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row:hover { background: var(--bg-elevated); }
+
+.settings-row__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-row__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-row__hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.settings-row__control {
+  flex-shrink: 0;
+}
+
+.settings-num {
+  width: 80px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+/* ─── Toggle ─────────────────────────────────────────────────────────────────── */
+.toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: var(--r-full);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-hover);
+  position: relative;
+  transition: all var(--dur-base) var(--ease);
+  cursor: pointer;
+}
+
+.toggle--on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-full);
+  background: #fff;
+  transition: transform var(--dur-base) var(--ease);
+  box-shadow: var(--shadow-sm);
+}
+
+.toggle--on .toggle__thumb { transform: translateX(20px); }
+
+/* ─── Footer ─────────────────────────────────────────────────────────────────── */
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--sp-2);
+}

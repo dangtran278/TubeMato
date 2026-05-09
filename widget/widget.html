@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <title>TubeMato Widget</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; overflow: hidden; background: transparent; }
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        color: #f0f0f5;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+      }
+
+      .widget {
+        width: 290px;
+        height: 90px;
+        background: rgba(15, 15, 19, 0.85);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        gap: 12px;
+        cursor: grab;
+        -webkit-app-region: drag;
+      }
+
+      .widget__timer {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 28px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        color: #f0f0f5;
+        min-width: 80px;
+        line-height: 1;
+      }
+
+      .widget__timer--break { color: #3aabe0; }
+      .widget__timer--grace { color: #f87171; animation: graceFlash 0.8s infinite; }
+      .widget__timer--idle  { color: #55556a; }
+
+      .widget__info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .widget__label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #9898b0;
+      }
+
+      .widget__dots {
+        display: flex;
+        gap: 4px;
+      }
+
+      .widget__dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+      }
+      .widget__dot--filled {
+        background: #e05a3a;
+        border-color: #e05a3a;
+        box-shadow: 0 0 4px rgba(224,90,58,0.5);
+      }
+
+      .widget__controls {
+        display: flex;
+        gap: 6px;
+        -webkit-app-region: no-drag;
+      }
+
+      .widget__btn {
+        width: 30px; height: 30px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #9898b0;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 120ms ease;
+      }
+      .widget__btn:hover {
+        background: rgba(255,255,255,0.12);
+        color: #f0f0f5;
+      }
+      .widget__btn--primary {
+        background: rgba(224,90,58,0.2);
+        border-color: rgba(224,90,58,0.3);
+        color: #e05a3a;
+      }
+      .widget__btn--primary:hover { background: rgba(224,90,58,0.35); }
+
+      @keyframes graceFlash { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    </style>
+  </head>
+  <body>
+    <div class="widget" id="widget">
+      <div class="widget__timer" id="timer">25:00</div>
+      <div class="widget__info">
+        <div class="widget__label" id="label">Ready</div>
+        <div class="widget__dots" id="dots"></div>
+      </div>
+      <div class="widget__controls">
+        <button class="widget__btn widget__btn--primary" id="btn-play" onclick="handlePlay()">▶</button>
+        <button class="widget__btn" id="btn-skip" onclick="handleSkip()">⏭</button>
+        <button class="widget__btn" id="btn-extend" onclick="handleExtend()" style="display:none">+1</button>
+      </div>
+    </div>
+
+    <script>
+      const timerEl = document.getElementById('timer')
+      const labelEl = document.getElementById('label')
+      const dotsEl  = document.getElementById('dots')
+      const btnPlay = document.getElementById('btn-play')
+      const btnSkip = document.getElementById('btn-skip')
+      const btnExtend = document.getElementById('btn-extend')
+
+      let pomodorosBeforeLongBreak = 4
+
+      window.tubemato.settings.get().then(s => {
+        pomodorosBeforeLongBreak = s.pomodorosBeforeLongBreak
+      })
+
+      window.tubemato.timer.getSession().then(update)
+      window.tubemato.timer.onTick(update)
+
+      function update(session) {
+        const { state, secondsLeft, sessionCount, graceSecondsLeft } = session
+        const m = Math.floor(secondsLeft / 60)
+        const s = secondsLeft % 60
+        const timeStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+
+        const isBreak = state === 'break-short' || state === 'break-long'
+        const isGrace = state === 'grace'
+
+        timerEl.textContent = isGrace ? `${graceSecondsLeft}s` : timeStr
+        timerEl.className = 'widget__timer' +
+          (isBreak ? ' widget__timer--break' : '') +
+          (isGrace ? ' widget__timer--grace' : '') +
+          (state === 'idle' ? ' widget__timer--idle' : '')
+
+        const labels = { idle:'Ready', running:'Focus', paused:'Paused', 'break-short':'Short Break', 'break-long':'Long Break', grace:'Break Over!' }
+        labelEl.textContent = labels[state] ?? state
+
+        // Dots
+        dotsEl.innerHTML = ''
+        for (let i = 0; i < pomodorosBeforeLongBreak; i++) {
+          const d = document.createElement('div')
+          d.className = 'widget__dot' + (i < sessionCount % pomodorosBeforeLongBreak ? ' widget__dot--filled' : '')
+          dotsEl.appendChild(d)
+        }
+
+        // Play button icon
+        btnPlay.textContent = state === 'running' ? '⏸' : '▶'
+        btnPlay.className = 'widget__btn ' + (state !== 'running' ? 'widget__btn--primary' : '')
+
+        // Extend break button
+        btnExtend.style.display = (isBreak || isGrace) ? 'flex' : 'none'
+      }
+
+      function handlePlay() {
+        window.tubemato.timer.getSession().then(s => {
+          if (s.state === 'running') window.tubemato.timer.pause()
+          else if (s.state === 'paused') window.tubemato.timer.resume()
+          else window.tubemato.timer.start()
+        })
+      }
+      function handleSkip() { window.tubemato.timer.skip() }
+      function handleExtend() { window.tubemato.timer.extendBreak() }
+    </script>
+  </body>
+</html>
