@@ -268,6 +268,27 @@ a { color: inherit; text-decoration: none; }
 .badge-done     { background: rgba(74,222,128,0.15); color: var(--success); }
 .badge-accent   { background: var(--accent-glow); color: var(--accent); }
 .badge-break    { background: var(--break-glow); color: var(--break-color); }
+.badge-ominous {
+  background: rgba(127, 29, 29, 0.45);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+}
+.badge-missed-cycle {
+  background: rgba(180, 83, 9, 0.25);
+  color: #fcd34d;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+/* Objective type + deadline line — grey (calm) vs orange (needs attention) */
+.badge-deadline-muted {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+.badge-deadline-urgent {
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid rgba(224, 90, 58, 0.35);
+}
 
 /* ─── Progress Bar ───────────────────────────────────────────────────────────── */
 .progress-bar {

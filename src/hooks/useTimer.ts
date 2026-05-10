@@ -34,7 +34,7 @@ export function useTimerEvents() {
 }
 
 export function useTimerActions() {
-  const start       = useCallback((taskId?: string) => window.tubemato.timer.start(taskId), [])
+  const start       = useCallback((objectiveId?: string) => window.tubemato.timer.start(objectiveId), [])
   const pause       = useCallback(() => window.tubemato.timer.pause(), [])
   const resume      = useCallback(() => window.tubemato.timer.resume(), [])
   const skip        = useCallback(() => window.tubemato.timer.skip(), [])

@@ -3,11 +3,11 @@
 
 import type {
   TimerSession,
-  Task,
-  Goal,
+  Objective,
   Settings,
   DaySummary,
   LogFile,
+  PomodoroSessionRecord,
 } from '../../electron/types'
 
 type UnsubFn = () => void
@@ -15,7 +15,7 @@ type UnsubFn = () => void
 interface TubematoAPI {
   timer: {
     getSession: () => Promise<TimerSession>
-    start: (taskId?: string) => void
+    start: (objectiveId?: string) => void
     pause: () => void
     resume: () => void
     skip: () => void
@@ -30,21 +30,17 @@ interface TubematoAPI {
     set: (value: Partial<Settings>) => Promise<void>
   }
 
-  tasks: {
-    get: () => Promise<Task[]>
-    set: (tasks: Task[]) => Promise<void>
-  }
-
-  goals: {
-    get: () => Promise<Goal[]>
-    set: (goals: Goal[]) => Promise<void>
-    checkin: (goalId: string) => Promise<void>
+  objectives: {
+    get: () => Promise<Objective[]>
+    set: (objectives: Objective[]) => Promise<void>
+    checkin: (objectiveId: string) => Promise<void>
   }
 
   logs: {
     getCurrent: () => Promise<LogFile>
     getPeriods: () => Promise<string[]>
     getPeriod: (period: string) => Promise<LogFile>
+    getAllSessions: () => Promise<PomodoroSessionRecord[]>
   }
 
   summary: {
@@ -61,6 +57,7 @@ interface TubematoAPI {
     minimize: () => void
     maximize: () => void
     close: () => void
+    showMain: () => void
     onWindowState: (cb: (maximized: boolean) => void) => UnsubFn
   }
 }

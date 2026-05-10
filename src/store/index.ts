@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { TimerSession, Task, Goal, Settings } from '../../electron/types'
+import type { TimerSession, Objective, Settings } from '../../electron/types'
 import { DEFAULT_SETTINGS } from '../../electron/types'
 
 // ─── Timer store ──────────────────────────────────────────────────────────────
@@ -12,10 +12,11 @@ interface TimerStore {
 export const useTimerStore = create<TimerStore>(set => ({
   session: {
     state: 'idle',
-    secondsLeft: DEFAULT_SETTINGS.workDuration * 60,
-    totalSeconds: DEFAULT_SETTINGS.workDuration * 60,
+    secondsLeft: DEFAULT_SETTINGS.workDuration,
+    totalSeconds: DEFAULT_SETTINGS.workDuration,
     sessionCount: 0,
     graceSecondsLeft: 0,
+    procrastinationSeconds: 0,
   },
   setSession: session => set({ session }),
 }))
@@ -32,26 +33,14 @@ export const useSettingsStore = create<SettingsStore>(set => ({
   setSettings: settings => set({ settings }),
 }))
 
-// ─── Tasks store ──────────────────────────────────────────────────────────────
+// ─── Objectives store ─────────────────────────────────────────────────────────
 
-interface TaskStore {
-  tasks: Task[]
-  setTasks: (tasks: Task[]) => void
+interface ObjectiveStore {
+  objectives: Objective[]
+  setObjectives: (objectives: Objective[]) => void
 }
 
-export const useTaskStore = create<TaskStore>(set => ({
-  tasks: [],
-  setTasks: tasks => set({ tasks }),
-}))
-
-// ─── Goals store ──────────────────────────────────────────────────────────────
-
-interface GoalStore {
-  goals: Goal[]
-  setGoals: (goals: Goal[]) => void
-}
-
-export const useGoalStore = create<GoalStore>(set => ({
-  goals: [],
-  setGoals: goals => set({ goals }),
+export const useObjectiveStore = create<ObjectiveStore>(set => ({
+  objectives: [],
+  setObjectives: objectives => set({ objectives }),
 }))

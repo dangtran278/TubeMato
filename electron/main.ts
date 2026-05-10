@@ -1,16 +1,15 @@
 import {
   app, BrowserWindow, Tray, Menu, nativeImage,
-  ipcMain, Notification, shell,
+  ipcMain,
 } from 'electron'
 import http from 'http'
 import path from 'path'
 import AutoLaunch from 'electron-auto-launch'
-import { store, getCurrentLog, readLog, getLogPeriods, logGoalCompletion } from './store'
+import { store, getCurrentLog, readLog, getLogPeriods, getAllLoggedSessions, logObjectiveCompletion } from './store'
 import { TimerEngine } from './timer'
 import { IPC } from './types'
-import { buildDaySummary, checkGoalReminders } from './scheduler'
-import type { Task, Goal, Settings } from './types'
-import { v4 as uuid } from 'uuid'
+import { buildDaySummary, checkObjectiveReminders } from './scheduler'
+import type { Objective } from './types'
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -35,8 +34,8 @@ app.whenReady().then(() => {
   applyAutoLaunch()
 })
 
-app.on('window-all-closed', e => {
-  e.preventDefault() // keep running in tray
+app.on('window-all-closed', () => {
+  // Stay running in tray (do not quit when windows are closed)
 })
 
 app.on('activate', () => {
@@ -324,7 +323,7 @@ async function applyAutoLaunch() {
 
 function scheduleEndOfDayCheck() {
   setInterval(() => {
-    checkGoalReminders()
+    checkObjectiveReminders()
     const summaryTime = store.get('settings').summaryTime
     const [h, m] = summaryTime.split(':').map(Number)
     const now = new Date()
@@ -351,7 +350,7 @@ function triggerDaySummary() {
 function registerIPC() {
   // Timer
   ipcMain.handle(IPC.TIMER_STATE, () => timer.getSession())
-  ipcMain.on(IPC.TIMER_START, (_, taskId) => timer.start(taskId))
+  ipcMain.on(IPC.TIMER_START, (_, objectiveId) => timer.start(objectiveId))
   ipcMain.on(IPC.TIMER_PAUSE, () => {
     timer.pause()
     cancelPendingFade()
@@ -376,20 +375,15 @@ function registerIPC() {
     }
   })
 
-  // Tasks
-  ipcMain.handle(IPC.TASKS_GET, () => store.get('tasks'))
-  ipcMain.handle(IPC.TASKS_SET, (_, tasks: Task[]) => store.set('tasks', tasks))
-
-  // Goals
-  ipcMain.handle(IPC.GOALS_GET, () => store.get('goals'))
-  ipcMain.handle(IPC.GOALS_SET, (_, goals: Goal[]) => store.set('goals', goals))
-  ipcMain.handle(IPC.GOALS_CHECKIN, (_, goalId: string) => {
-    const goal = store.get('goals').find((g: Goal) => g.id === goalId)
-    if (!goal) return
-    logGoalCompletion({
-      goalId,
+  ipcMain.handle(IPC.OBJECTIVES_GET, () => store.get('objectives'))
+  ipcMain.handle(IPC.OBJECTIVES_SET, (_, objectives: Objective[]) => store.set('objectives', objectives))
+  ipcMain.handle(IPC.OBJECTIVES_CHECKIN, (_, objectiveId: string) => {
+    const objective = store.get('objectives').find((o: Objective) => o.id === objectiveId)
+    if (!objective) return
+    logObjectiveCompletion({
+      objectiveId,
       completedAt: new Date().toISOString(),
-      periodStart: goal.periodStart ?? new Date().toISOString().slice(0, 10),
+      periodStart: objective.periodStart ?? new Date().toISOString().slice(0, 10),
     })
   })
 
@@ -397,6 +391,7 @@ function registerIPC() {
   ipcMain.handle(IPC.LOG_GET_CURRENT, () => getCurrentLog())
   ipcMain.handle(IPC.LOG_GET_PERIODS, () => getLogPeriods())
   ipcMain.handle(IPC.LOG_GET_PERIOD, (_, period: string) => readLog(period))
+  ipcMain.handle(IPC.LOG_GET_ALL_SESSIONS, () => getAllLoggedSessions())
 
   // Summary
   ipcMain.handle(IPC.SUMMARY_GET_PENDING, () => store.get('pendingSummary'))
@@ -413,4 +408,10 @@ function registerIPC() {
     else mainWindow?.maximize()
   })
   ipcMain.on(IPC.APP_CLOSE, () => mainWindow?.hide())
+  ipcMain.on(IPC.APP_SHOW_MAIN, () => {
+    if (!mainWindow) return
+    mainWindow.show()
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  })
 }

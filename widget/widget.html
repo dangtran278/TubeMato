@@ -39,6 +39,9 @@
         color: #f0f0f5;
         min-width: 80px;
         line-height: 1;
+        /* Not draggable: whole .widget is drag; dblclick here opens the app */
+        -webkit-app-region: no-drag;
+        cursor: pointer;
       }
 
       .widget__timer--break         { color: #3aabe0; }
@@ -234,6 +237,12 @@
 
       function handleSkip()   { window.tubemato.timer.skip() }
       function handleExtend() { window.tubemato.timer.extendBreak() }
+
+      timerEl.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        window.tubemato.app.showMain()
+      })
     </script>
   </body>
 </html>

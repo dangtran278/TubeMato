@@ -82,11 +82,11 @@
   border-radius: var(--r-lg);
 }
 
-.timer-task-selector {
+.timer-objective-selector {
   width: 280px;
 }
 
-.task-selector {
+.objective-selector {
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;

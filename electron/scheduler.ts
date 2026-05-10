@@ -1,6 +1,6 @@
 import { Notification } from 'electron'
 import { store, getCurrentLog } from './store'
-import type { DaySummary, Goal, GoalLog, GoalProgress } from './types'
+import type { DaySummary, Objective, ObjectiveLog, ObjectiveProgress } from './types'
 
 // ─── Build end-of-day summary ─────────────────────────────────────────────────
 
@@ -17,22 +17,21 @@ export function buildDaySummary(): DaySummary {
   const procrastinationMinutes = Math.round(todayProc.reduce((acc, e) => acc + e.durationSeconds, 0) / 60)
   const breakExtensionMinutes = todayExt.reduce((acc, e) => acc + e.minutesAdded, 0)
 
-  const tasks = store.get('tasks')
-  const tasksCompleted = tasks.filter(t => t.status === 'done').length
-  const tasksInProgress = tasks.filter(t => t.status === 'in-progress').length
-  const tasksPending = tasks.filter(t => t.status === 'pending').length
+  const objectiveCheckinsToday = log.objectiveLogs.filter(
+    l => l.completedAt.slice(0, 10) === date
+  ).length
 
-  const goals = store.get('goals').filter((g: Goal) => !g.archived)
-  const goalProgress: GoalProgress[] = goals
-    .filter((g: Goal) => isGoalDueToday(g, date))
-    .map((g: Goal) => {
-      const completed = countCompletionsForCurrentPeriod(g, log.goalLogs)
+  const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
+  const objectiveProgress: ObjectiveProgress[] = objectives
+    .filter((o: Objective) => isObjectiveDueToday(o, date))
+    .map((o: Objective) => {
+      const completed = countCompletionsForCurrentPeriod(o, log.objectiveLogs)
       return {
-        goalId: g.id,
-        title: g.title,
+        objectiveId: o.id,
+        title: o.title,
         completed,
-        target: g.targetCompletions,
-        met: completed >= g.targetCompletions,
+        target: o.targetCompletions,
+        met: completed >= o.targetCompletions,
         dueToday: true,
       }
     })
@@ -41,75 +40,72 @@ export function buildDaySummary(): DaySummary {
     date,
     totalFocusMinutes,
     pomodorosCompleted,
-    tasksCompleted,
-    tasksInProgress,
-    tasksPending,
+    objectiveCheckinsToday,
     procrastinationMinutes,
     breakExtensionMinutes,
-    goalProgress,
+    objectiveProgress,
   }
 }
 
-// ─── Goal period helpers ──────────────────────────────────────────────────────
+// ─── Objective period helpers ─────────────────────────────────────────────────
 
-function isGoalDueToday(goal: Goal, today: string): boolean {
-  if (goal.type === 'one-time') {
-    return !goal.dueDate || goal.dueDate <= today
+function isObjectiveDueToday(objective: Objective, today: string): boolean {
+  if (objective.type === 'one-time') {
+    return !objective.dueDate || objective.dueDate <= today
   }
-  // Repeating: due today if today falls on an interval checkpoint
-  if (!goal.periodStart || !goal.recurrenceDays) return false
-  const start = new Date(goal.periodStart)
+  if (!objective.periodStart || !objective.recurrenceDays) return false
+  const start = new Date(objective.periodStart)
   const now = new Date(today)
   const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / 86_400_000)
-  const period = goal.recurrenceDays
+  const period = objective.recurrenceDays
 
-  if (goal.reminderMode === 'end') {
+  if (objective.reminderMode === 'end') {
     return daysSinceStart > 0 && daysSinceStart % period === 0
   }
 
-  // Spread mode: checkpoint every floor(period / target) days
-  const interval = Math.floor(period / goal.targetCompletions)
+  const interval = Math.floor(period / objective.targetCompletions)
   return interval > 0 && daysSinceStart > 0 && daysSinceStart % interval === 0
 }
 
-function countCompletionsForCurrentPeriod(goal: Goal, goalLogs: GoalLog[]): number {
-  const periodStart = goal.periodStart ?? new Date().toISOString().slice(0, 10)
-  return goalLogs.filter(gl => gl.goalId === goal.id && gl.periodStart === periodStart).length
+function countCompletionsForCurrentPeriod(objective: Objective, objectiveLogs: ObjectiveLog[]): number {
+  const periodStart = objective.periodStart ?? new Date().toISOString().slice(0, 10)
+  return objectiveLogs.filter(
+    gl => gl.objectiveId === objective.id && gl.periodStart === periodStart
+  ).length
 }
 
-// ─── Reminder notifications ───────────────────────────────────────────────────
+// ─── Reminder notifications ─────────────────────────────────────────────────
 // Called by the scheduler interval in main.ts
 
-export function checkGoalReminders() {
+export function checkObjectiveReminders() {
   const today = new Date().toISOString().slice(0, 10)
   const log = getCurrentLog()
-  const goals = store.get('goals').filter((g: Goal) => !g.archived)
+  const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
 
-  for (const goal of goals) {
-    if (!isGoalDueToday(goal, today)) continue
-    const completed = countCompletionsForCurrentPeriod(goal, log.goalLogs)
+  for (const objective of objectives) {
+    if (!isObjectiveDueToday(objective, today)) continue
+    const completed = countCompletionsForCurrentPeriod(objective, log.objectiveLogs)
 
-    // Impossible to complete check
-    if (goal.type === 'repeating' && goal.recurrenceDays && goal.periodStart) {
-      const start = new Date(goal.periodStart)
+    if (objective.type === 'repeating' && objective.recurrenceDays && objective.periodStart) {
+      const start = new Date(objective.periodStart)
       const now = new Date(today)
       const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / 86_400_000)
-      const daysLeft = goal.recurrenceDays - daysSinceStart
-      const remaining = goal.targetCompletions - completed
+      const daysLeft = objective.recurrenceDays - daysSinceStart
+      const remaining = objective.targetCompletions - completed
       if (daysLeft > 0 && daysLeft < remaining) {
-        sendReminder(goal.title, `⚠️ Impossible to complete: ${remaining} left but only ${daysLeft} day(s) remaining!`)
+        sendReminder(objective.title, `⚠️ Impossible to complete: ${remaining} left but only ${daysLeft} day(s) remaining!`)
         continue
       }
     }
 
-    if (completed < goal.targetCompletions) {
-      sendReminder(goal.title, `${completed}/${goal.targetCompletions} completed — don't forget to check in!`)
+    if (completed < objective.targetCompletions) {
+      sendReminder(objective.title, `${completed}/${objective.targetCompletions} completed — don't forget to check in!`)
     }
   }
 }
 
-function sendReminder(goalTitle: string, body: string) {
+function sendReminder(objectiveTitle: string, body: string) {
   if (Notification.isSupported()) {
-    new Notification({ title: `🍅 TubeMato: ${goalTitle}`, body }).show()
+    new Notification({ title: `🍅 TubeMato: ${objectiveTitle}`, body }).show()
   }
 }

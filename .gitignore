@@ -146,6 +146,7 @@ vite.config.ts.timestamp-*
 dist-electron/
 release/
 build/
+docs/
 
 # OS Specific
 .DS_Store

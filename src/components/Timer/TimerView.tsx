@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { useTimerStore, useSettingsStore, useTaskStore } from '../../store'
-import type { TimerState } from '../../../electron/types'
+import { useState } from 'react'
+import { useTimerStore, useSettingsStore, useObjectiveStore } from '../../store'
+import type { TimerState } from '@electron/types'
 import './Timer.css'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,22 +102,20 @@ function ProcrastinatingOverlay({ seconds, onStart, onExtend }: {
   )
 }
 
-// ─── Task Selector ────────────────────────────────────────────────────────────
+// ─── Objective selector (focus session tag) ───────────────────────────────────
 
-function TaskSelector({ value, onChange }: { value?: string; onChange: (id?: string) => void }) {
-  const { tasks } = useTaskStore()
-  const active = tasks.filter(t => t.status !== 'done')
+function ObjectiveSelector({ value, onChange }: { value?: string; onChange: (id?: string) => void }) {
+  const { objectives } = useObjectiveStore()
+  const active = objectives.filter(o => !o.archived)
   return (
     <select
-      className="input task-selector"
+      className="input objective-selector"
       value={value ?? ''}
       onChange={e => onChange(e.target.value || undefined)}
     >
-      <option value="">No task assigned</option>
-      {active.map(t => (
-        <option key={t.id} value={t.id}>
-          {t.status === 'in-progress' ? '● ' : '○ '}{t.title}
-        </option>
+      <option value="">No objective</option>
+      {active.map(o => (
+        <option key={o.id} value={o.id}>{o.title}</option>
       ))}
     </select>
   )
@@ -142,7 +140,7 @@ import { useTimerActions } from '../../hooks/useTimer'
 export default function TimerView() {
   const { session } = useTimerStore()
   const { settings } = useSettingsStore()
-  const [activeTaskId, setActiveTaskId] = useState<string | undefined>()
+  const [activeObjectiveId, setActiveObjectiveId] = useState<string | undefined>()
   const { start, pause, resume, skip, extendBreak } = useTimerActions()
 
   const progress = session.totalSeconds > 0 ? session.secondsLeft / session.totalSeconds : 0
@@ -186,7 +184,7 @@ export default function TimerView() {
       {/* Controls */}
       <div className="timer-controls">
         {session.state === 'idle' && (
-          <button className="btn btn-primary btn-lg" onClick={() => start(activeTaskId)}>
+          <button className="btn btn-primary btn-lg" onClick={() => start(activeObjectiveId)}>
             ▶ Start Focus
           </button>
         )}
@@ -215,10 +213,9 @@ export default function TimerView() {
         )}
       </div>
 
-      {/* Task selector — only when work is active or starting */}
       {(session.state === 'idle' || session.state === 'running' || session.state === 'paused') && (
-        <div className="timer-task-selector">
-          <TaskSelector value={activeTaskId} onChange={setActiveTaskId} />
+        <div className="timer-objective-selector">
+          <ObjectiveSelector value={activeObjectiveId} onChange={setActiveObjectiveId} />
         </div>
       )}
 

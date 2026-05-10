@@ -1,13 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from './types'
-import type { TimerSession, Task, Goal, Settings, DaySummary, LogFile } from './types'
+import type { TimerSession, Objective, Settings, DaySummary, LogFile, PomodoroSessionRecord } from './types'
+
+// Forward main → renderer IPC to a window CustomEvent (Analytics listens for this)
+ipcRenderer.on('summary:show', (_e, summary: DaySummary) => {
+  window.dispatchEvent(new CustomEvent('summary:show', { detail: summary }))
+})
 
 // Expose a safe, typed API to the renderer process via window.tubemato
 contextBridge.exposeInMainWorld('tubemato', {
   // ─── Timer ─────────────────────────────────────────────────────────────────
   timer: {
     getSession: (): Promise<TimerSession> => ipcRenderer.invoke(IPC.TIMER_STATE),
-    start: (taskId?: string) => ipcRenderer.send(IPC.TIMER_START, taskId),
+    start: (objectiveId?: string) => ipcRenderer.send(IPC.TIMER_START, objectiveId),
     pause: () => ipcRenderer.send(IPC.TIMER_PAUSE),
     resume: () => ipcRenderer.send(IPC.TIMER_RESUME),
     skip: () => ipcRenderer.send(IPC.TIMER_SKIP),
@@ -31,17 +36,11 @@ contextBridge.exposeInMainWorld('tubemato', {
     set: (value: Partial<Settings>) => ipcRenderer.invoke(IPC.STORE_SET, 'settings', value),
   },
 
-  // ─── Tasks ─────────────────────────────────────────────────────────────────
-  tasks: {
-    get: (): Promise<Task[]> => ipcRenderer.invoke(IPC.TASKS_GET),
-    set: (tasks: Task[]) => ipcRenderer.invoke(IPC.TASKS_SET, tasks),
-  },
-
-  // ─── Goals ─────────────────────────────────────────────────────────────────
-  goals: {
-    get: (): Promise<Goal[]> => ipcRenderer.invoke(IPC.GOALS_GET),
-    set: (goals: Goal[]) => ipcRenderer.invoke(IPC.GOALS_SET, goals),
-    checkin: (goalId: string) => ipcRenderer.invoke(IPC.GOALS_CHECKIN, goalId),
+  // ─── Objectives ────────────────────────────────────────────────────────────
+  objectives: {
+    get: (): Promise<Objective[]> => ipcRenderer.invoke(IPC.OBJECTIVES_GET),
+    set: (objectives: Objective[]) => ipcRenderer.invoke(IPC.OBJECTIVES_SET, objectives),
+    checkin: (objectiveId: string) => ipcRenderer.invoke(IPC.OBJECTIVES_CHECKIN, objectiveId),
   },
 
   // ─── Logs ──────────────────────────────────────────────────────────────────
@@ -49,6 +48,8 @@ contextBridge.exposeInMainWorld('tubemato', {
     getCurrent: (): Promise<LogFile> => ipcRenderer.invoke(IPC.LOG_GET_CURRENT),
     getPeriods: (): Promise<string[]> => ipcRenderer.invoke(IPC.LOG_GET_PERIODS),
     getPeriod: (period: string): Promise<LogFile> => ipcRenderer.invoke(IPC.LOG_GET_PERIOD, period),
+    getAllSessions: (): Promise<PomodoroSessionRecord[]> =>
+      ipcRenderer.invoke(IPC.LOG_GET_ALL_SESSIONS),
   },
 
   // ─── Summary ───────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ contextBridge.exposeInMainWorld('tubemato', {
     minimize: () => ipcRenderer.send(IPC.APP_MINIMIZE),
     maximize: () => ipcRenderer.send(IPC.APP_MAXIMIZE),
     close: () => ipcRenderer.send(IPC.APP_CLOSE),
+    showMain: () => ipcRenderer.send(IPC.APP_SHOW_MAIN),
     onWindowState: (cb: (maximized: boolean) => void) => {
       const handler = (_: Electron.IpcRendererEvent, maximized: boolean) => cb(maximized)
       ipcRenderer.on('window:state', handler)

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import type { LogFile, DaySummary } from '../../../../electron/types'
+import { useEffect, useState } from 'react'
+import type { LogFile, DaySummary, ObjectiveProgress } from '@electron/types'
 import './Analytics.css'
 
 // ─── Bar chart ────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ function StatCard({ icon, value, label, sub }: { icon: string; value: string | n
 // ─── Summary modal ────────────────────────────────────────────────────────────
 
 function SummaryModal({ summary, onClose }: { summary: DaySummary; onClose: () => void }) {
-  const allMet = summary.goalProgress.every(g => g.met)
+  const allMet = summary.objectiveProgress.length === 0 || summary.objectiveProgress.every((g: ObjectiveProgress) => g.met)
 
   return (
     <div className="modal-backdrop">
@@ -70,35 +70,31 @@ function SummaryModal({ summary, onClose }: { summary: DaySummary; onClose: () =
               <span className="summary-stat__lbl">☕ Break extensions</span>
             </div>
             <div className="summary-stat">
-              <span className="summary-stat__val">{summary.tasksCompleted}</span>
-              <span className="summary-stat__lbl">✓ Tasks done</span>
-            </div>
-            <div className="summary-stat">
-              <span className="summary-stat__val">{summary.tasksPending}</span>
-              <span className="summary-stat__lbl">○ Pending</span>
+              <span className="summary-stat__val">{summary.objectiveCheckinsToday}</span>
+              <span className="summary-stat__lbl">✓ Objective check-ins</span>
             </div>
           </div>
 
-          {summary.goalProgress.length > 0 && (
+          {summary.objectiveProgress.length > 0 && (
             <div>
-              <div className="summary-section-title">Goals due today</div>
-              {summary.goalProgress.map(gp => (
-                <div key={gp.goalId} className={`summary-goal ${gp.met ? 'summary-goal--met' : ''}`}>
+              <div className="summary-section-title">Objectives due today</div>
+              {summary.objectiveProgress.map((gp: ObjectiveProgress) => (
+                <div key={gp.objectiveId} className={`summary-objective ${gp.met ? 'summary-objective--met' : ''}`}>
                   <span>{gp.met ? '✅' : '⭕'} {gp.title}</span>
-                  <span className="summary-goal__count">{gp.completed}/{gp.target}</span>
+                  <span className="summary-objective__count">{gp.completed}/{gp.target}</span>
                 </div>
               ))}
             </div>
           )}
 
-          {!allMet && (
+          {!allMet && summary.objectiveProgress.length > 0 && (
             <div className="summary-note">
               💪 Keep going! Tomorrow is a fresh start.
             </div>
           )}
-          {allMet && summary.goalProgress.length > 0 && (
+          {allMet && summary.objectiveProgress.length > 0 && (
             <div className="summary-note summary-note--success">
-              🎉 All goals met today — great work!
+              🎉 All objectives met today — great work!
             </div>
           )}
         </div>
@@ -124,9 +120,12 @@ export default function AnalyticsView() {
     window.tubemato.summary.getPending().then(setPendingSummary)
 
     // Listen for live summary event
-    const handler = (_: any, summary: DaySummary) => setPendingSummary(summary)
-    window.addEventListener('summary:show' as any, handler)
-    return () => window.removeEventListener('summary:show' as any, handler)
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<DaySummary>).detail
+      if (detail) setPendingSummary(detail)
+    }
+    window.addEventListener('summary:show', handler)
+    return () => window.removeEventListener('summary:show', handler)
   }, [])
 
   useEffect(() => {
@@ -139,9 +138,14 @@ export default function AnalyticsView() {
   }
 
   // Build chart data: last 14 days
-  const focusByDay = buildDayMap(log?.sessions.map(s => ({ date: s.date, value: s.durationMinutes })) ?? [])
+  const focusByDay = buildDayMap(
+    log?.sessions.map((s: { date: string; durationMinutes: number }) => ({ date: s.date, value: s.durationMinutes })) ?? []
+  )
   const procByDay = buildDayMap(
-    log?.procrastinationEvents.map(e => ({ date: e.date, value: Math.round(e.durationSeconds / 60) })) ?? []
+    log?.procrastinationEvents.map((e: { date: string; durationSeconds: number }) => ({
+      date: e.date,
+      value: Math.round(e.durationSeconds / 60),
+    })) ?? []
   )
 
   // Streak calculation (4+ pomodoros per day)
@@ -168,7 +172,7 @@ export default function AnalyticsView() {
         <StatCard icon="🔥" value={streak} label="Current streak" sub={`≥4 🍅/day`} />
         <StatCard icon="🏆" value={longestStreak} label="Best streak" />
         <StatCard icon="⏱"
-          value={`${Math.round((log?.sessions.reduce((a, s) => a + s.durationMinutes, 0) ?? 0) / 60)}h`}
+          value={`${Math.round((log?.sessions.reduce((a: number, s: { durationMinutes: number }) => a + s.durationMinutes, 0) ?? 0) / 60)}h`}
           label="Total focus time" sub={selectedPeriod} />
         <StatCard icon="🍅" value={log?.sessions.length ?? 0} label="Total pomodoros" />
       </div>
@@ -213,7 +217,6 @@ function calcStreaks(sessions: { date: string; durationMinutes: number }[], thre
   }
 
   // Calculate current active streak
-  const today = new Date().toISOString().slice(0, 10)
   let d = new Date()
   streak = 0
   while (true) {

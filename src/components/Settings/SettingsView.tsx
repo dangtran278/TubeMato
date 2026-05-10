@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSettingsStore } from '../../store'
-import type { Settings, LogRollPeriod } from '../../../../electron/types'
+import type { Settings, LogRollPeriod } from '@electron/types'
 import './Settings.css'
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

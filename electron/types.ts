@@ -2,9 +2,7 @@
 
 export type TimerState = 'idle' | 'running' | 'paused' | 'break-short' | 'break-long' | 'grace' | 'procrastinating'
 
-export type TaskStatus = 'pending' | 'in-progress' | 'done'
-
-export type GoalType = 'one-time' | 'repeating'
+export type ObjectiveType = 'one-time' | 'repeating'
 
 export type ReminderMode = 'spread' | 'end'
 
@@ -57,60 +55,46 @@ export interface TimerSession {
   secondsLeft: number
   totalSeconds: number
   sessionCount: number    // pomodoros completed this run
-  activeTaskId?: string
+  activeObjectiveId?: string
   graceSecondsLeft: number
   procrastinationSeconds: number   // counts up after grace expires
   isBreakPaused?: boolean
 }
 
-// ─── Tasks ───────────────────────────────────────────────────────────────────
+// ─── Objectives (formerly goals) ─────────────────────────────────────────────
 
-export interface Task {
+export interface Objective {
   id: string
   title: string
   description: string
-  status: TaskStatus
-  pomodorosEstimated: number
-  pomodorosCompleted: number
-  customWorkDuration?: number   // override global work duration (minutes)
-  createdAt: string             // ISO
-  completedAt?: string
-}
-
-// ─── Goals ───────────────────────────────────────────────────────────────────
-
-export interface Goal {
-  id: string
-  title: string
-  description: string
-  type: GoalType
-  // For repeating goals: recurrence in days (e.g. 3 = every 3 days, 14 = every 2 weeks)
+  type: ObjectiveType
+  // For repeating: recurrence in days (e.g. 3 = every 3 days, 14 = every 2 weeks)
   recurrenceDays?: number
   // X completions needed per recurrence period
   targetCompletions: number
   reminderMode: ReminderMode
   createdAt: string
-  // For one-time goals: the deadline date string "YYYY-MM-DD"
+  // For one-time: the deadline date string "YYYY-MM-DD"
   dueDate?: string
   // For repeating: the start date of current period
   periodStart?: string
   archived: boolean
 }
 
-export interface GoalLog {
+export interface ObjectiveLog {
   id: string
-  goalId: string
+  objectiveId: string
   completedAt: string   // ISO
   periodStart: string   // which period this completion belongs to
 }
 
-// ─── Log File (per rotation period) ─────────────────────────────────────────
+// ─── Log File (per rotation period) ───────────────────────────────────────────
 
 export interface PomodoroSessionRecord {
   id: string
   startAt: string
   endAt: string
-  taskId?: string
+  objectiveId?: string
   date: string    // YYYY-MM-DD
   durationMinutes: number
 }
@@ -134,7 +118,7 @@ export interface LogFile {
   sessions: PomodoroSessionRecord[]
   procrastinationEvents: ProcrastinationEvent[]
   breakExtensions: BreakExtension[]
-  goalLogs: GoalLog[]
+  objectiveLogs: ObjectiveLog[]
 }
 
 // ─── Day Summary ─────────────────────────────────────────────────────────────
@@ -143,16 +127,14 @@ export interface DaySummary {
   date: string
   totalFocusMinutes: number
   pomodorosCompleted: number
-  tasksCompleted: number
-  tasksInProgress: number
-  tasksPending: number
+  objectiveCheckinsToday: number
   procrastinationMinutes: number
   breakExtensionMinutes: number
-  goalProgress: GoalProgress[]
+  objectiveProgress: ObjectiveProgress[]
 }
 
-export interface GoalProgress {
-  goalId: string
+export interface ObjectiveProgress {
+  objectiveId: string
   title: string
   completed: number
   target: number
@@ -177,19 +159,16 @@ export const IPC = {
   STORE_GET: 'store:get',
   STORE_SET: 'store:set',
 
-  // Tasks
-  TASKS_GET: 'tasks:get',
-  TASKS_SET: 'tasks:set',
-
-  // Goals
-  GOALS_GET: 'goals:get',
-  GOALS_SET: 'goals:set',
-  GOALS_CHECKIN: 'goals:checkin',
+  // Objectives
+  OBJECTIVES_GET: 'objectives:get',
+  OBJECTIVES_SET: 'objectives:set',
+  OBJECTIVES_CHECKIN: 'objectives:checkin',
 
   // Log
   LOG_GET_CURRENT: 'log:get-current',
   LOG_GET_PERIODS: 'log:get-periods',
   LOG_GET_PERIOD: 'log:get-period',
+  LOG_GET_ALL_SESSIONS: 'log:get-all-sessions',
 
   // Summary
   SUMMARY_GET_PENDING: 'summary:get-pending',
@@ -203,6 +182,7 @@ export const IPC = {
   APP_MINIMIZE: 'app:minimize',
   APP_MAXIMIZE: 'app:maximize',
   APP_CLOSE: 'app:close',
+  APP_SHOW_MAIN: 'app:show-main',
 } as const
 
 export type BellType = 'work-start' | 'break-start' | 'grace-start' | 'overdue-start'

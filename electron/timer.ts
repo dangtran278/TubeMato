@@ -1,6 +1,5 @@
-import { TimerState, TimerSession, Settings, BellType } from './types'
+import { TimerSession, Settings, BellType } from './types'
 import { logSession, logProcrastination, logBreakExtension, store } from './store'
-import { v4 as uuid } from 'uuid'
 
 // ─── Timer engine (runs in main process) ─────────────────────────────────────
 
@@ -43,11 +42,11 @@ export class TimerEngine {
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
-  start(taskId?: string) {
+  start(objectiveId?: string) {
     if (this.session.state !== 'idle') return
     this.workSessionStart = new Date()
     this.session.state = 'running'
-    this.session.activeTaskId = taskId
+    this.session.activeObjectiveId = objectiveId
     this.fadeTriggered = false
     this.onBell('work-start')
     this.startTick()
@@ -163,7 +162,7 @@ export class TimerEngine {
       logSession({
         startAt: this.workSessionStart.toISOString(),
         endAt: new Date().toISOString(),
-        taskId: this.session.activeTaskId,
+        objectiveId: this.session.activeObjectiveId,
         date: today(),
         durationMinutes: Math.round(this.settings.workDuration / 60),
       })
@@ -213,11 +212,7 @@ export class TimerEngine {
     this.endProcrastination()
     this.fadeTriggered = false
     this.onBell('work-start')
-    const workDuration = this.session.activeTaskId
-      ? (store.get('tasks').find(t => t.id === this.session.activeTaskId)?.customWorkDuration
-          ? store.get('tasks').find(t => t.id === this.session.activeTaskId)!.customWorkDuration! * 60
-          : this.settings.workDuration)
-      : this.settings.workDuration
+    const workDuration = this.settings.workDuration
     this.workSessionStart = new Date()
     this.session.state = 'running'
     this.session.secondsLeft = workDuration

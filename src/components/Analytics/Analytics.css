@@ -101,7 +101,7 @@
   margin-bottom: var(--sp-2);
 }
 
-.summary-goal {
+.summary-objective {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -112,8 +112,8 @@
   margin-bottom: var(--sp-1);
 }
 
-.summary-goal--met { opacity: 0.7; }
-.summary-goal__count { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+.summary-objective--met { opacity: 0.7; }
+.summary-objective__count { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
 
 .summary-note {
   padding: var(--sp-3) var(--sp-4);
