@@ -18,8 +18,8 @@ contextBridge.exposeInMainWorld('tubemato', {
       ipcRenderer.on(IPC.TIMER_TICK, handler)
       return () => ipcRenderer.off(IPC.TIMER_TICK, handler)
     },
-    onBell: (cb: () => void) => {
-      const handler = () => cb()
+    onBell: (cb: (type: string) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, type: string) => cb(type)
       ipcRenderer.on('timer:bell', handler)
       return () => ipcRenderer.off('timer:bell', handler)
     },
@@ -65,6 +65,14 @@ contextBridge.exposeInMainWorld('tubemato', {
   // ─── App ───────────────────────────────────────────────────────────────────
   app: {
     quit: () => ipcRenderer.send(IPC.APP_QUIT),
+    minimize: () => ipcRenderer.send(IPC.APP_MINIMIZE),
+    maximize: () => ipcRenderer.send(IPC.APP_MAXIMIZE),
+    close: () => ipcRenderer.send(IPC.APP_CLOSE),
+    onWindowState: (cb: (maximized: boolean) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, maximized: boolean) => cb(maximized)
+      ipcRenderer.on('window:state', handler)
+      return () => ipcRenderer.off('window:state', handler)
+    },
   },
 })
 

@@ -22,7 +22,7 @@ interface TubematoAPI {
     extendBreak: () => void
     reset: () => void
     onTick: (cb: (session: TimerSession) => void) => UnsubFn
-    onBell: (cb: () => void) => UnsubFn
+    onBell: (cb: (type: string) => void) => UnsubFn
   }
 
   settings: {
@@ -58,6 +58,10 @@ interface TubematoAPI {
 
   app: {
     quit: () => void
+    minimize: () => void
+    maximize: () => void
+    close: () => void
+    onWindowState: (cb: (maximized: boolean) => void) => UnsubFn
   }
 }
 

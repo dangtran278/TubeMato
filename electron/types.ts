@@ -1,6 +1,6 @@
 // Shared types across main and renderer processes
 
-export type TimerState = 'idle' | 'running' | 'paused' | 'break-short' | 'break-long' | 'grace'
+export type TimerState = 'idle' | 'running' | 'paused' | 'break-short' | 'break-long' | 'grace' | 'procrastinating'
 
 export type TaskStatus = 'pending' | 'in-progress' | 'done'
 
@@ -13,41 +13,41 @@ export type LogRollPeriod = 'monthly' | '2-monthly' | 'quarterly' | 'yearly'
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 export interface Settings {
-  workDuration: number            // minutes
-  shortBreakDuration: number
-  longBreakDuration: number
+  workDuration: number            // seconds (e.g. 1500 = 25 min)
+  shortBreakDuration: number      // seconds
+  longBreakDuration: number       // seconds
   pomodorosBeforeLongBreak: number
   procrastinationGrace: number    // seconds
-  procrastinationNudgeMinutes: number
+  procrastinationNudgeSeconds: number  // seconds idle before nudge notification
   autoLaunch: boolean
   summaryTime: string             // "HH:MM"
   logRollPeriod: LogRollPeriod
   logRollDay: number
-  youtubeHideControls: boolean
-  youtubeShuffle: boolean
   miniWidgetPosition: { x: number; y: number }
   showMiniWidget: boolean
   streakThreshold: number         // pomodoros/day to count as streak day
   bellVolume: number              // 0–100
+  overdueVolume: number           // 0–100, volume for grace/overdue alerts
+  ytVolume: number                // 0–100, YouTube target volume on fade-in
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  workDuration: 25,
-  shortBreakDuration: 5,
-  longBreakDuration: 15,
+  workDuration: 1500,            // 25 min
+  shortBreakDuration: 300,       // 5 min
+  longBreakDuration: 900,        // 15 min
   pomodorosBeforeLongBreak: 4,
-  procrastinationGrace: 10,
-  procrastinationNudgeMinutes: 5,
+  procrastinationGrace: 30,
+  procrastinationNudgeSeconds: 300,  // 5 min
   autoLaunch: true,
   summaryTime: '21:00',
   logRollPeriod: 'monthly',
   logRollDay: 1,
-  youtubeHideControls: true,
-  youtubeShuffle: true,
   miniWidgetPosition: { x: 20, y: 20 },
   showMiniWidget: true,
   streakThreshold: 4,
   bellVolume: 80,
+  overdueVolume: 70,
+  ytVolume: 80,
 }
 
 // ─── Timer ───────────────────────────────────────────────────────────────────
@@ -59,6 +59,8 @@ export interface TimerSession {
   sessionCount: number    // pomodoros completed this run
   activeTaskId?: string
   graceSecondsLeft: number
+  procrastinationSeconds: number   // counts up after grace expires
+  isBreakPaused?: boolean
 }
 
 // ─── Tasks ───────────────────────────────────────────────────────────────────
@@ -198,4 +200,9 @@ export const IPC = {
 
   // App
   APP_QUIT: 'app:quit',
+  APP_MINIMIZE: 'app:minimize',
+  APP_MAXIMIZE: 'app:maximize',
+  APP_CLOSE: 'app:close',
 } as const
+
+export type BellType = 'work-start' | 'break-start' | 'grace-start' | 'overdue-start'

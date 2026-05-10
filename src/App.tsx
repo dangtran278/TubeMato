@@ -16,11 +16,16 @@ const NAV: { id: View; icon: string; label: string }[] = [
   { id: 'settings',  icon: '⚙',  label: 'Settings' },
 ]
 
+import { useTimerEvents } from './hooks/useTimer'
+
 export default function App() {
   const [view, setView] = useState<View>('timer')
   const { setSettings } = useSettingsStore()
   const { setTasks } = useTaskStore()
   const { setGoals } = useGoalStore()
+
+  // Ensure timer ticks and audio bells play globally
+  useTimerEvents()
 
   // Load initial data on mount
   useEffect(() => {
@@ -34,19 +39,31 @@ export default function App() {
     })
   }, [])
 
-  function hide() { /* main window hidden by close handler in main.ts */ }
-  function quit() { window.tubemato.app.quit() }
+
+  const [maximized, setMaximized] = useState(false)
+
+  useEffect(() => {
+    // Sync with actual Electron window state (drag-to-maximise etc.)
+    const unsub = window.tubemato.app.onWindowState(setMaximized)
+    return () => unsub()
+  }, [])
+
+  function minimize() { window.tubemato.app.minimize() }
+  function toggleMaximize() { window.tubemato.app.maximize() }   // state updated via onWindowState
+  function closeToTray() { window.tubemato.app.close() }
   function toggleWidget() { window.tubemato.widget.toggle() }
 
   return (
     <div className="app-layout">
-      {/* Titlebar */}
+      {/* Titlebar — draggable, with real window controls on the right */}
       <div className="titlebar">
-        <div style={{ width: 24 }} /> {/* spacer for close/min buttons on mac-style */}
         <span className="titlebar__title">TubeMato</span>
         <div className="titlebar__controls">
-          <button className="titlebar__btn" onClick={toggleWidget} title="Toggle widget">⬚</button>
-          <button className="titlebar__btn titlebar__btn--close" onClick={quit} title="Quit">✕</button>
+          <button className="titlebar__btn" onClick={minimize} title="Minimize">─</button>
+          <button className="titlebar__btn" onClick={toggleMaximize} title={maximized ? 'Restore' : 'Maximize'}>
+            {maximized ? '❐' : '☐'}
+          </button>
+          <button className="titlebar__btn titlebar__btn--close" onClick={closeToTray} title="Close to tray">✕</button>
         </div>
       </div>
 
@@ -66,6 +83,15 @@ export default function App() {
             </button>
           ))}
         </nav>
+        {/* Widget toggle at bottom of sidebar */}
+        <button
+          className="nav-item sidebar__widget-toggle"
+          onClick={toggleWidget}
+          title="Toggle floating widget"
+        >
+          ⬚
+          <span className="nav-item__tooltip">Widget</span>
+        </button>
       </div>
 
       {/* Content */}

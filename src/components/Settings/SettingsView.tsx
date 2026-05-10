@@ -69,23 +69,23 @@ export default function SettingsView() {
       <div className="settings-body">
 
         <Section title="⏱ Timer">
-          <Row label="Work duration" hint="minutes">
-            <NumInput value={local.workDuration} min={1} max={90} onChange={v => patch({ workDuration: v })} />
+          <Row label="Work duration" hint="seconds  (e.g. 1500 = 25 min)">
+            <NumInput value={local.workDuration} min={60} max={7200} onChange={v => patch({ workDuration: v })} />
           </Row>
-          <Row label="Short break" hint="minutes">
-            <NumInput value={local.shortBreakDuration} min={1} max={30} onChange={v => patch({ shortBreakDuration: v })} />
+          <Row label="Short break" hint="seconds  (e.g. 300 = 5 min)">
+            <NumInput value={local.shortBreakDuration} min={30} max={3600} onChange={v => patch({ shortBreakDuration: v })} />
           </Row>
-          <Row label="Long break" hint="minutes">
-            <NumInput value={local.longBreakDuration} min={1} max={60} onChange={v => patch({ longBreakDuration: v })} />
+          <Row label="Long break" hint="seconds  (e.g. 900 = 15 min)">
+            <NumInput value={local.longBreakDuration} min={60} max={7200} onChange={v => patch({ longBreakDuration: v })} />
           </Row>
           <Row label="Pomodoros before long break">
             <NumInput value={local.pomodorosBeforeLongBreak} min={1} max={10} onChange={v => patch({ pomodorosBeforeLongBreak: v })} />
           </Row>
           <Row label="Grace period" hint="seconds before procrastination tracking begins">
-            <NumInput value={local.procrastinationGrace} min={5} max={60} onChange={v => patch({ procrastinationGrace: v })} />
+            <NumInput value={local.procrastinationGrace} min={5} max={300} onChange={v => patch({ procrastinationGrace: v })} />
           </Row>
-          <Row label="Procrastination nudge" hint="notify after N idle minutes">
-            <NumInput value={local.procrastinationNudgeMinutes} min={1} max={30} onChange={v => patch({ procrastinationNudgeMinutes: v })} />
+          <Row label="Procrastination nudge" hint="seconds idle before notification (e.g. 300 = 5 min)">
+            <NumInput value={local.procrastinationNudgeSeconds ?? 300} min={30} max={3600} onChange={v => patch({ procrastinationNudgeSeconds: v })} />
           </Row>
         </Section>
 
@@ -98,14 +98,21 @@ export default function SettingsView() {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, width: 32 }}>{local.bellVolume}</span>
             </div>
           </Row>
-        </Section>
-
-        <Section title="▶ YouTube">
-          <Row label="Hide player controls" hint="distraction-free mode">
-            <Toggle value={local.youtubeHideControls} onChange={v => patch({ youtubeHideControls: v })} />
+          <Row label="Grace/overdue alert volume" hint="0–100">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input type="range" min={0} max={100} value={local.overdueVolume ?? 70}
+                onChange={e => patch({ overdueVolume: Number(e.target.value) })}
+                style={{ width: 120, accentColor: 'var(--accent)' }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, width: 32 }}>{local.overdueVolume ?? 70}</span>
+            </div>
           </Row>
-          <Row label="Shuffle playlists by default">
-            <Toggle value={local.youtubeShuffle} onChange={v => patch({ youtubeShuffle: v })} />
+          <Row label="YouTube fade-in volume" hint="0–100 — volume after music fades back in">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input type="range" min={0} max={100} value={local.ytVolume ?? 80}
+                onChange={e => patch({ ytVolume: Number(e.target.value) })}
+                style={{ width: 120, accentColor: 'var(--accent)' }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, width: 32 }}>{local.ytVolume ?? 80}</span>
+            </div>
           </Row>
         </Section>
 

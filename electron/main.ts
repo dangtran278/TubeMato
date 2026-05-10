@@ -2,6 +2,7 @@ import {
   app, BrowserWindow, Tray, Menu, nativeImage,
   ipcMain, Notification, shell,
 } from 'electron'
+import http from 'http'
 import path from 'path'
 import AutoLaunch from 'electron-auto-launch'
 import { store, getCurrentLog, readLog, getLogPeriods, logGoalCompletion } from './store'
@@ -27,6 +28,7 @@ app.whenReady().then(() => {
   createMainWindow()
   createWidgetWindow()
   createTray()
+  createCommandServer()
   registerIPC()
   startTimerBroadcast()
   scheduleEndOfDayCheck()
@@ -73,6 +75,10 @@ function createMainWindow() {
     e.preventDefault()
     mainWindow?.hide()
   })
+
+  // Keep renderer's maximize button in sync with actual window state
+  mainWindow.on('maximize', () => mainWindow?.webContents.send('window:state', true))
+  mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:state', false))
 }
 
 // ─── Mini widget window ───────────────────────────────────────────────────────
@@ -89,7 +95,7 @@ function createWidgetWindow() {
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
-    focusable: true,     // focusable so buttons can be clicked
+    focusable: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -104,7 +110,6 @@ function createWidgetWindow() {
     widgetWindow.loadFile(path.join(__dirname, '../dist/widget/widget.html'))
   }
 
-  // Save position when moved
   widgetWindow.on('moved', () => {
     const [x, y] = widgetWindow!.getPosition()
     const settings = store.get('settings')
@@ -112,6 +117,84 @@ function createWidgetWindow() {
   })
 
   if (!store.get('settings').showMiniWidget) widgetWindow.hide()
+}
+
+// ─── YouTube command bridge (long-poll) ──────────────────────────────────────
+// Background service worker (extension context) polls GET /command.
+// Requests from the extension origin bypass Chrome's Private Network Access.
+
+const YT_PORT = 27182
+type YtCmd = { type: string; duration?: number; targetVolume?: number }
+const cmdQueue: YtCmd[] = []
+const cmdWaiters: Array<(cmd: YtCmd | null) => void> = []
+
+function createCommandServer() {
+  const server = http.createServer((req, res) => {
+    // Allow cross-origin from the extension
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+
+    if (req.method === 'OPTIONS') { res.writeHead(204).end(); return }
+
+    if (req.method === 'GET' && req.url === '/command') {
+      req.socket?.setTimeout(0)
+
+      if (cmdQueue.length > 0) {
+        // Command already waiting — return it immediately
+        const cmd = cmdQueue.shift()!
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify(cmd))
+        return
+      }
+
+      // Nothing queued — hold the connection until a command arrives or 25 s elapses
+      let resolved = false
+      const timeout = setTimeout(() => {
+        if (resolved) return
+        resolved = true
+        const i = cmdWaiters.indexOf(resolve)
+        if (i >= 0) cmdWaiters.splice(i, 1)
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        res.end('{}')
+      }, 25_000)
+
+      function resolve(cmd: YtCmd | null) {
+        if (resolved) return
+        resolved = true
+        clearTimeout(timeout)
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        res.end(cmd ? JSON.stringify(cmd) : '{}')
+      }
+
+      cmdWaiters.push(resolve)
+      req.on('close', () => {
+        resolved = true
+        clearTimeout(timeout)
+        const i = cmdWaiters.indexOf(resolve)
+        if (i >= 0) cmdWaiters.splice(i, 1)
+      })
+      return
+    }
+
+    res.writeHead(404).end()
+  })
+
+  server.listen(YT_PORT, '127.0.0.1', () => {
+    if (isDev) console.log(`[TubeMato] YouTube bridge on 127.0.0.1:${YT_PORT}`)
+  })
+  server.on('error', (e: NodeJS.ErrnoException) => {
+    if (e.code === 'EADDRINUSE')
+      console.warn(`[TubeMato] Port ${YT_PORT} in use — YouTube bridge inactive.`)
+  })
+}
+
+/** Delivers a command to the extension background worker immediately or queues it. */
+function sendYtCommand(cmd: YtCmd) {
+  if (cmdWaiters.length > 0) {
+    cmdWaiters.shift()!(cmd)
+  } else {
+    cmdQueue.push(cmd)  // background will pick it up on next poll
+  }
 }
 
 // ─── Tray ─────────────────────────────────────────────────────────────────────
@@ -126,9 +209,9 @@ const TRAY_ICONS: Record<string, string> = {
 function getTrayIcon(state: string): Electron.NativeImage {
   const iconName = TRAY_ICONS[
     state === 'running' ? 'working'
-    : state.startsWith('break') || state === 'grace' ? 'break'
-    : state === 'paused' ? 'paused'
-    : 'idle'
+      : state.startsWith('break') || state === 'grace' ? 'break'
+        : state === 'paused' ? 'paused'
+          : 'idle'
   ]
   const iconPath = path.join(__dirname, '../assets/icons/', iconName)
   try { return nativeImage.createFromPath(iconPath) }
@@ -174,6 +257,16 @@ function updateTray(state: string) {
 
 // ─── Timer broadcast ──────────────────────────────────────────────────────────
 
+const FADE_MS = 2000   // full session fade duration (ms)
+const FADE_PAUSE = 700    // quick fade for manual pause/resume
+let pendingFadeIn: ReturnType<typeof setTimeout> | null = null
+let pendingBellOut: ReturnType<typeof setTimeout> | null = null
+
+function cancelPendingFade() {
+  if (pendingFadeIn) { clearTimeout(pendingFadeIn); pendingFadeIn = null }
+  if (pendingBellOut) { clearTimeout(pendingBellOut); pendingBellOut = null }
+}
+
 function startTimerBroadcast() {
   timer.onTick = session => {
     mainWindow?.webContents.send(IPC.TIMER_TICK, session)
@@ -181,9 +274,31 @@ function startTimerBroadcast() {
     updateTray(session.state)
   }
 
-  timer.onBell = () => {
-    mainWindow?.webContents.send('timer:bell')
-    widgetWindow?.webContents.send('timer:bell')
+  timer.onBell = type => {
+    if (type === 'break-start') {
+      // Fade music OUT first, then ring bell after fade completes
+      cancelPendingFade()
+      sendYtCommand({ type: 'fade-out', duration: FADE_MS })
+      pendingBellOut = setTimeout(() => {
+        pendingBellOut = null
+        mainWindow?.webContents.send('timer:bell', type)
+        widgetWindow?.webContents.send('timer:bell', type)
+      }, FADE_MS + 100)
+    } else if (type === 'work-start') {
+      // Bell rings immediately, then music fades in after bell
+      mainWindow?.webContents.send('timer:bell', type)
+      widgetWindow?.webContents.send('timer:bell', type)
+      cancelPendingFade()
+      const vol = (store.get('settings').ytVolume ?? 80) / 100
+      pendingFadeIn = setTimeout(() => {
+        pendingFadeIn = null
+        sendYtCommand({ type: 'fade-in', duration: FADE_MS, targetVolume: vol })
+      }, 1500)
+    } else {
+      // grace-start, overdue-start: alert only, no music change
+      mainWindow?.webContents.send('timer:bell', type)
+      widgetWindow?.webContents.send('timer:bell', type)
+    }
   }
 }
 
@@ -208,7 +323,6 @@ async function applyAutoLaunch() {
 // ─── End-of-day summary scheduler ────────────────────────────────────────────
 
 function scheduleEndOfDayCheck() {
-  // Check every minute whether it's summary time or a goal reminder is due
   setInterval(() => {
     checkGoalReminders()
     const summaryTime = store.get('settings').summaryTime
@@ -226,10 +340,8 @@ function triggerDaySummary() {
   const isOnBreak = session.state.startsWith('break') || session.state === 'grace'
 
   if (mainWindow?.isVisible() && isOnBreak) {
-    // Show summary now in renderer
     mainWindow.webContents.send('summary:show', summary)
   } else {
-    // Store as pending — shown on next startup
     store.set('pendingSummary', summary)
   }
 }
@@ -240,9 +352,16 @@ function registerIPC() {
   // Timer
   ipcMain.handle(IPC.TIMER_STATE, () => timer.getSession())
   ipcMain.on(IPC.TIMER_START, (_, taskId) => timer.start(taskId))
-  ipcMain.on(IPC.TIMER_PAUSE, () => timer.pause())
-  ipcMain.on(IPC.TIMER_RESUME, () => timer.resume())
-  ipcMain.on(IPC.TIMER_SKIP, () => timer.skip())
+  ipcMain.on(IPC.TIMER_PAUSE, () => {
+    timer.pause()
+    cancelPendingFade()
+    sendYtCommand({ type: 'fade-out', duration: FADE_PAUSE })
+  })
+  ipcMain.on(IPC.TIMER_RESUME, () => timer.resume())    // onBell('work-start') handles fade-in
+  ipcMain.on(IPC.TIMER_SKIP, () => {
+    cancelPendingFade()          // cancel any in-flight fade/bell from prior transition
+    timer.skip()
+  })
   ipcMain.on(IPC.TIMER_EXTEND_BREAK, () => timer.extendBreak())
   ipcMain.on(IPC.TIMER_RESET, () => timer.reset())
 
@@ -288,4 +407,10 @@ function registerIPC() {
 
   // App
   ipcMain.on(IPC.APP_QUIT, () => app.exit(0))
+  ipcMain.on(IPC.APP_MINIMIZE, () => mainWindow?.minimize())
+  ipcMain.on(IPC.APP_MAXIMIZE, () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
+  })
+  ipcMain.on(IPC.APP_CLOSE, () => mainWindow?.hide())
 }

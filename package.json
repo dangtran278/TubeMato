@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:dev": "vite",
     "electron:build": "npm run build && electron-builder",
     "preview": "vite preview",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "generate-extension-icons": "node scripts/generate-extension-icons.js"
   },
   "dependencies": {
     "electron-auto-launch": "^5.0.6",

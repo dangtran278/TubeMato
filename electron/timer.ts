@@ -1,23 +1,25 @@
-import { TimerState, TimerSession, Settings } from './types'
+import { TimerState, TimerSession, Settings, BellType } from './types'
 import { logSession, logProcrastination, logBreakExtension, store } from './store'
 import { v4 as uuid } from 'uuid'
 
 // ─── Timer engine (runs in main process) ─────────────────────────────────────
-// This keeps time accurately even when the window is hidden/minimized.
 
 type TickCallback = (session: TimerSession) => void
-type BellCallback = () => void
+type BellCallback = (type: BellType) => void
 
 export class TimerEngine {
   private session: TimerSession
   private settings: Settings
   private interval: ReturnType<typeof setInterval> | null = null
   private graceInterval: ReturnType<typeof setInterval> | null = null
+  private procrastinationInterval: ReturnType<typeof setInterval> | null = null
   private procrastinationStart: Date | null = null
+  private workSessionStart: Date = new Date()
 
-  // Callbacks fired to IPC so renderer/widget stay in sync
   public onTick: TickCallback = () => {}
   public onBell: BellCallback = () => {}
+
+  private fadeTriggered = false
 
   constructor() {
     this.settings = store.get('settings')
@@ -27,20 +29,17 @@ export class TimerEngine {
   private buildIdle(): TimerSession {
     return {
       state: 'idle',
-      secondsLeft: this.settings.workDuration * 60,
-      totalSeconds: this.settings.workDuration * 60,
+      secondsLeft: this.settings.workDuration,   // now stored in seconds
+      totalSeconds: this.settings.workDuration,
       sessionCount: 0,
       graceSecondsLeft: 0,
+      procrastinationSeconds: 0,
     }
   }
 
-  getSession(): TimerSession {
-    return { ...this.session }
-  }
+  getSession(): TimerSession { return { ...this.session } }
 
-  reloadSettings() {
-    this.settings = store.get('settings')
-  }
+  reloadSettings() { this.settings = store.get('settings') }
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
@@ -49,22 +48,34 @@ export class TimerEngine {
     this.workSessionStart = new Date()
     this.session.state = 'running'
     this.session.activeTaskId = taskId
-    this.onBell()  // bell before fade-in
+    this.fadeTriggered = false
+    this.onBell('work-start')
     this.startTick()
   }
 
   pause() {
-    if (this.session.state !== 'running') return
-    this.session.state = 'paused'
-    this.stopTick()
-    this.onTick(this.getSession())
+    if (this.session.state === 'running') {
+      this.session.state = 'paused'
+      this.stopTick()
+      this.onTick(this.getSession())
+    } else if (this.session.state.startsWith('break')) {
+      this.session.isBreakPaused = true
+      this.stopTick()
+      this.onTick(this.getSession())
+    }
   }
 
   resume() {
-    if (this.session.state !== 'paused') return
-    this.session.state = 'running'
-    this.onBell()  // bell before fade-in
-    this.startTick()
+    if (this.session.state === 'paused') {
+      this.session.state = 'running'
+      this.fadeTriggered = false
+      this.onBell('work-start')
+      this.startTick()
+    } else if (this.session.state.startsWith('break') && this.session.isBreakPaused) {
+      this.session.isBreakPaused = false
+      this.startTick()
+      this.onTick(this.getSession())
+    }
   }
 
   skip() {
@@ -72,27 +83,36 @@ export class TimerEngine {
     this.stopGrace()
     if (this.session.state === 'running' || this.session.state === 'paused') {
       this.endWorkSession(false)
-    } else if (this.session.state.startsWith('break') || this.session.state === 'grace') {
+    } else if (
+      this.session.state.startsWith('break') ||
+      this.session.state === 'grace' ||
+      this.session.state === 'procrastinating'
+    ) {
       this.endBreak()
     }
   }
 
   extendBreak() {
-    if (this.session.state !== 'break-short' && this.session.state !== 'break-long' && this.session.state !== 'grace') return
+    if (
+      this.session.state !== 'break-short' &&
+      this.session.state !== 'break-long' &&
+      this.session.state !== 'grace' &&
+      this.session.state !== 'procrastinating'
+    ) return
 
-    // If we were in grace, restart break with 1 min
-    if (this.session.state === 'grace') {
+    if (this.session.state === 'grace' || this.session.state === 'procrastinating') {
       this.stopGrace()
+      this.endProcrastination()
       this.session.state = this.session.sessionCount % this.settings.pomodorosBeforeLongBreak === 0
         ? 'break-long' : 'break-short'
+      this.session.secondsLeft = 60
+      this.session.totalSeconds = 60
+    } else {
+      this.session.secondsLeft += 60
+      this.session.totalSeconds += 60
     }
 
-    this.session.secondsLeft += 60
-    this.session.totalSeconds += 60
-    // Log the extension
     logBreakExtension({ timestamp: new Date().toISOString(), minutesAdded: 1, date: today() })
-    // Cancel any procrastination accumulation
-    this.endProcrastination()
     this.startTick()
     this.onTick(this.getSession())
   }
@@ -120,6 +140,12 @@ export class TimerEngine {
     this.session.secondsLeft--
     this.onTick(this.getSession())
 
+    // Trigger fade-out 2 seconds before work session ends
+    if (this.session.state === 'running' && this.session.secondsLeft === 2 && !this.fadeTriggered) {
+      this.fadeTriggered = true
+      this.onBell('break-start')
+    }
+
     if (this.session.secondsLeft <= 0) {
       this.stopTick()
       if (this.session.state === 'running') {
@@ -132,30 +158,30 @@ export class TimerEngine {
 
   // ─── Work session completion ────────────────────────────────────────────────
 
-  private workSessionStart: Date = new Date()
-
   private endWorkSession(completed: boolean) {
-    // Log the session
     if (completed) {
       logSession({
         startAt: this.workSessionStart.toISOString(),
         endAt: new Date().toISOString(),
         taskId: this.session.activeTaskId,
         date: today(),
-        durationMinutes: this.settings.workDuration,
+        durationMinutes: Math.round(this.settings.workDuration / 60),
       })
       this.session.sessionCount++
     }
 
-    // Bell fires after fade-out (renderer handles YouTube fade, we just signal bell)
-    this.onBell()
+    if (!this.fadeTriggered) {
+      this.fadeTriggered = true
+      this.onBell('break-start')
+    }
 
-    // Transition to break
+    // Compute break type BEFORE the delay (sessionCount already incremented above)
     const isLongBreak = this.session.sessionCount % this.settings.pomodorosBeforeLongBreak === 0
     const breakDuration = isLongBreak ? this.settings.longBreakDuration : this.settings.shortBreakDuration
-    this.session.state = isLongBreak ? 'break-long' : 'break-short'
-    this.session.secondsLeft = breakDuration * 60
-    this.session.totalSeconds = breakDuration * 60
+    
+    this.session.state       = isLongBreak ? 'break-long' : 'break-short'
+    this.session.secondsLeft = breakDuration
+    this.session.totalSeconds = breakDuration
     this.onTick(this.getSession())
     this.startTick()
   }
@@ -165,13 +191,13 @@ export class TimerEngine {
   private startGrace() {
     this.session.state = 'grace'
     this.session.graceSecondsLeft = this.settings.procrastinationGrace
-    this.onBell()  // bell at start of grace (marking break end)
+    // 'grace-start' = break is over, distinct alert sound (no music change — music already paused)
+    this.onBell('grace-start')
     this.onTick(this.getSession())
 
     this.graceInterval = setInterval(() => {
       this.session.graceSecondsLeft--
       this.onTick(this.getSession())
-
       if (this.session.graceSecondsLeft <= 0) {
         this.stopGrace()
         this.beginProcrastination()
@@ -185,14 +211,19 @@ export class TimerEngine {
 
   private endBreak() {
     this.endProcrastination()
-    this.onBell()  // bell before fade-in for next work session
+    this.fadeTriggered = false
+    this.onBell('work-start')
     const workDuration = this.session.activeTaskId
-      ? (store.get('tasks').find(t => t.id === this.session.activeTaskId)?.customWorkDuration ?? this.settings.workDuration)
+      ? (store.get('tasks').find(t => t.id === this.session.activeTaskId)?.customWorkDuration
+          ? store.get('tasks').find(t => t.id === this.session.activeTaskId)!.customWorkDuration! * 60
+          : this.settings.workDuration)
       : this.settings.workDuration
     this.workSessionStart = new Date()
     this.session.state = 'running'
-    this.session.secondsLeft = workDuration * 60
-    this.session.totalSeconds = workDuration * 60
+    this.session.secondsLeft = workDuration
+    this.session.totalSeconds = workDuration
+    this.session.procrastinationSeconds = 0
+    this.session.isBreakPaused = false
     this.onTick(this.getSession())
     this.startTick()
   }
@@ -201,11 +232,26 @@ export class TimerEngine {
 
   private beginProcrastination() {
     this.procrastinationStart = new Date()
+    this.session.state = 'procrastinating'
+    // Start counting from the grace period duration (grace time counts as overdue)
+    this.session.procrastinationSeconds = this.settings.procrastinationGrace
+    this.onBell('overdue-start')
+    this.onTick(this.getSession())
+
+    this.procrastinationInterval = setInterval(() => {
+      this.session.procrastinationSeconds++
+      this.onTick(this.getSession())
+    }, 1000)
   }
 
   private endProcrastination() {
+    if (this.procrastinationInterval) {
+      clearInterval(this.procrastinationInterval)
+      this.procrastinationInterval = null
+    }
     if (!this.procrastinationStart) return
     const durationSeconds = Math.round((Date.now() - this.procrastinationStart.getTime()) / 1000)
+      + this.settings.procrastinationGrace   // include grace time in logged duration
     if (durationSeconds > 0) {
       logProcrastination({ startAt: this.procrastinationStart.toISOString(), durationSeconds, date: today() })
     }

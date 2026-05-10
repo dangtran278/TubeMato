@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "TubeMato Bridge",
+  "version": "1.1.0",
+  "description": "Controls YouTube playback in sync with the TubeMato Pomodoro timer.",
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "permissions": ["tabs"],
+
+  "host_permissions": [
+    "http://127.0.0.1:27182/*"
+  ],
+
+  "icons": {
+    "16":  "icon16.png",
+    "48":  "icon48.png",
+    "128": "icon128.png"
+  }
+}
