@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "electron:dev": "vite",
-    "electron:build": "npm run build && electron-builder",
+    "electron:build": "npm run build && node scripts/generate-extension-icons.js && electron-builder",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js",
     "generate-extension-icons": "node scripts/generate-extension-icons.js"
@@ -50,6 +50,13 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "extension",
+        "to": "tubemato-youtube-bridge",
+        "filter": ["**/*"]
+      }
     ]
   }
 }

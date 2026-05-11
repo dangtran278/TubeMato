@@ -1,9 +1,10 @@
 import {
   app, BrowserWindow, Tray, Menu, nativeImage,
-  ipcMain,
+  ipcMain, shell,
 } from 'electron'
 import http from 'http'
 import path from 'path'
+import fs from 'fs'
 import AutoLaunch from 'electron-auto-launch'
 import { store, getCurrentLog, readLog, getLogPeriods, getAllLoggedSessions, logObjectiveCompletion } from './store'
 import { TimerEngine } from './timer'
@@ -14,6 +15,14 @@ import type { Objective } from './types'
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 const isDev = !app.isPackaged
+
+/** Folder containing manifest.json for the YouTube bridge (unpacked in dev, extraResources when packaged). */
+function getBridgeExtensionDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'tubemato-youtube-bridge')
+  }
+  return path.join(__dirname, '../extension')
+}
 let mainWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -420,5 +429,18 @@ function registerIPC() {
     mainWindow.show()
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
+  })
+
+  ipcMain.handle(IPC.BRIDGE_EXTENSION_PATH, () => {
+    const dir = getBridgeExtensionDir()
+    return fs.existsSync(path.join(dir, 'manifest.json')) ? dir : null
+  })
+  ipcMain.handle(IPC.BRIDGE_EXTENSION_OPEN_FOLDER, async () => {
+    const dir = getBridgeExtensionDir()
+    if (!fs.existsSync(path.join(dir, 'manifest.json'))) {
+      return { ok: false as const, error: 'Extension folder not found (reinstall TubeMato or run npm run generate-extension-icons).' }
+    }
+    const err = await shell.openPath(dir)
+    return err === '' ? { ok: true as const } : { ok: false as const, error: err }
   })
 }

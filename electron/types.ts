@@ -185,6 +185,10 @@ export const IPC = {
   APP_MAXIMIZE: 'app:maximize',
   APP_CLOSE: 'app:close',
   APP_SHOW_MAIN: 'app:show-main',
+
+  /** Bundled browser extension folder (Load unpacked in Brave/Chrome). */
+  BRIDGE_EXTENSION_PATH: 'bridge-extension:path',
+  BRIDGE_EXTENSION_OPEN_FOLDER: 'bridge-extension:open-folder',
 } as const
 
 export type BellType = 'work-start' | 'break-start' | 'grace-start' | 'overdue-start'

@@ -60,6 +60,8 @@ interface TubematoAPI {
     close: () => void
     showMain: () => void
     onWindowState: (cb: (maximized: boolean) => void) => UnsubFn
+    getBridgeExtensionPath: () => Promise<string | null>
+    openBridgeExtensionFolder: () => Promise<{ ok: true } | { ok: false; error: string }>
   }
 }
 

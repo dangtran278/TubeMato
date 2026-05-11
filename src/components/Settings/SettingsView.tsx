@@ -43,9 +43,12 @@ export default function SettingsView() {
   const { settings, setSettings } = useSettingsStore()
   const [local, setLocal] = useState<Settings>(settings)
   const [saved, setSaved] = useState(false)
+  const [bridgePath, setBridgePath] = useState<string | null>(null)
+  const [bridgeMsg, setBridgeMsg] = useState<string | null>(null)
 
   useEffect(() => {
     window.tubemato.settings.get().then(s => { setSettings(s); setLocal(s) })
+    window.tubemato.app.getBridgeExtensionPath().then(setBridgePath)
   }, [])
 
   function patch(patch: Partial<Settings>) {
@@ -86,6 +89,33 @@ export default function SettingsView() {
           </Row>
           <Row label="Procrastination nudge" hint="seconds idle before notification (e.g. 300 = 5 min)">
             <NumInput value={local.procrastinationNudgeSeconds ?? 300} min={30} max={3600} onChange={v => patch({ procrastinationNudgeSeconds: v })} />
+          </Row>
+        </Section>
+
+        <Section title="▶ YouTube bridge (browser)">
+          <Row
+            label="TubeMato Bridge extension"
+            hint="Brave or Chrome → Extensions → Developer mode → Load unpacked → select this folder. Keep TubeMato running while YouTube is open."
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={async () => {
+                  setBridgeMsg(null)
+                  const r = await window.tubemato.app.openBridgeExtensionFolder()
+                  setBridgeMsg(r.ok ? 'Opened folder in Explorer.' : r.error)
+                }}
+              >
+                Open extension folder
+              </button>
+              {bridgePath && (
+                <span className="settings-row__hint" style={{ fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                  {bridgePath}
+                </span>
+              )}
+              {bridgeMsg && <span className="settings-row__hint">{bridgeMsg}</span>}
+            </div>
           </Row>
         </Section>
 
