@@ -23,6 +23,8 @@ interface StoreSchema {
   objectives: Objective[]
   pendingSummary: DaySummary | null
   currentLogPeriod: string   // e.g. "2026-05"
+  /** objective id → YYYY-MM-DD of last reminder notification (max one ping per objective per day) */
+  objectiveReminderLastSent: Record<string, string>
 }
 
 export const store = new Store<StoreSchema>({
@@ -32,6 +34,7 @@ export const store = new Store<StoreSchema>({
     objectives: [],
     pendingSummary: null,
     currentLogPeriod: getPeriodLabel(new Date(), DEFAULT_SETTINGS.logRollPeriod),
+    objectiveReminderLastSent: {},
   },
 })
 

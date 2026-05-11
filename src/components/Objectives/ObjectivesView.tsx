@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useObjectiveStore } from '../../store'
-import type { Objective, ObjectiveType, ReminderMode, PomodoroSessionRecord, LogFile } from '@electron/types'
+import type { Objective, ObjectiveType, ReminderMode, PomodoroSessionRecord, LogFile, TimerSession } from '@electron/types'
 import { v4 as uuid } from 'uuid'
 import {
   sortActiveObjectives,
@@ -135,12 +135,14 @@ function toneClass(tone: ObjectiveCardTone): string {
   return ''
 }
 
-function ObjectiveCard({ objective, completions, tone, focusMinutes, today, onCheckin, onEdit, onArchive }: {
+function ObjectiveCard({ objective, completions, tone, focusMinutes, today, isSelected, onSelect, onCheckin, onEdit, onArchive }: {
   objective: Objective
   completions: number
   tone: ObjectiveCardTone
   focusMinutes: number | null
   today: string
+  isSelected: boolean
+  onSelect: () => void
   onCheckin: () => void
   onEdit: () => void
   onArchive: () => void
@@ -152,7 +154,18 @@ function ObjectiveCard({ objective, completions, tone, focusMinutes, today, onCh
   const deadlineBadgeClass = deadlineBadgeUrgent ? 'badge-deadline-urgent' : 'badge-deadline-muted'
 
   return (
-    <div className={`objective-card card ${met ? 'objective-card--met' : ''} ${toneClass(tone)}`}>
+    <div
+      className={`objective-card card ${met ? 'objective-card--met' : ''} ${toneClass(tone)} ${isSelected ? 'objective-card--selected' : ''}`}
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+    >
       <div className="objective-card__body">
         <div className="objective-card__top">
           <div className="objective-card__header">
@@ -163,8 +176,8 @@ function ObjectiveCard({ objective, completions, tone, focusMinutes, today, onCh
               )}
             </div>
             <div className="objective-card__actions">
-              <button type="button" className="btn-icon" onClick={onEdit} title="Edit">✏</button>
-              <button type="button" className="btn-icon" onClick={onArchive} title="Archive"
+              <button type="button" className="btn-icon" onClick={e => { e.stopPropagation(); onEdit() }} title="Edit">✏</button>
+              <button type="button" className="btn-icon" onClick={e => { e.stopPropagation(); onArchive() }} title="Archive"
                 style={{ color: 'var(--text-muted)' }}>🗄</button>
             </div>
           </div>
@@ -205,7 +218,7 @@ function ObjectiveCard({ objective, completions, tone, focusMinutes, today, onCh
               <div className="objective-card__focus">{formatFocusMinutes(focusMinutes)}</div>
             )}
             {!met && (
-              <button type="button" className="btn btn-ghost objective-card__checkin" onClick={onCheckin}>
+              <button type="button" className="btn btn-ghost objective-card__checkin" onClick={e => { e.stopPropagation(); onCheckin() }}>
                 ✓ Mark done
               </button>
             )}
@@ -224,6 +237,8 @@ export default function ObjectivesView() {
   const [editing, setEditing] = useState<Objective | undefined>()
   const [completionsMap, setCompletionsMap] = useState<Record<string, number>>({})
   const [sessions, setSessions] = useState<PomodoroSessionRecord[]>([])
+  const [activeObjectiveId, setActiveObjectiveId] = useState<string | undefined>()
+  const [timerSession, setTimerSession] = useState<TimerSession | null>(null)
 
   const recomputeCompletions = useCallback((fetched: Objective[], log: LogFile) => {
     const day = new Date().toISOString().slice(0, 10)
@@ -248,6 +263,25 @@ export default function ObjectivesView() {
       recomputeCompletions(fetched, log)
     })()
   }, [setObjectives, recomputeCompletions])
+
+  useEffect(() => {
+    const unsub = window.tubemato.timer.onTick(session => {
+      setActiveObjectiveId(session.activeObjectiveId)
+      setTimerSession(session)
+    })
+    window.tubemato.timer.getSession().then(session => {
+      setActiveObjectiveId(session.activeObjectiveId)
+      setTimerSession(session)
+    })
+    return () => unsub()
+  }, [])
+
+  function liveFocusMinutesForObjective(objectiveId: string): number {
+    if (!timerSession) return 0
+    const isFocusState = timerSession.state === 'running' || timerSession.state === 'paused'
+    if (!isFocusState || timerSession.activeObjectiveId !== objectiveId) return 0
+    return Math.floor(Math.max(0, timerSession.objectiveFocusSeconds) / 60)
+  }
 
   function saveObjective(objective: Objective) {
     const exists = objectives.find(o => o.id === objective.id)
@@ -277,6 +311,11 @@ export default function ObjectivesView() {
   const today = new Date().toISOString().slice(0, 10)
   const active = sortActiveObjectives(objectives.filter(o => !o.archived))
 
+  function selectObjective(id: string) {
+    setActiveObjectiveId(id)
+    window.tubemato.timer.setObjective(id)
+  }
+
   return (
     <div className="view">
       <div className="view-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -294,7 +333,7 @@ export default function ObjectivesView() {
           const completions = completionsMap[o.id] ?? 0
           const met = completions >= o.targetCompletions
           const tone = objectiveCardTone(o, completions, today)
-          const focusMins = met ? sumFocusMinutesForObjective(o, sessions) : null
+          const focusMins = met ? sumFocusMinutesForObjective(o, sessions) + liveFocusMinutesForObjective(o.id) : null
           return (
             <ObjectiveCard
               key={o.id}
@@ -303,6 +342,8 @@ export default function ObjectivesView() {
               tone={tone}
               focusMinutes={focusMins}
               today={today}
+              isSelected={activeObjectiveId === o.id}
+              onSelect={() => selectObjective(o.id)}
               onCheckin={() => checkin(o.id)}
               onEdit={() => { setEditing(o); setShowForm(true) }}
               onArchive={() => archiveObjective(o.id)}

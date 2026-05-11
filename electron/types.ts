@@ -56,6 +56,7 @@ export interface TimerSession {
   totalSeconds: number
   sessionCount: number    // pomodoros completed this run
   activeObjectiveId?: string
+  objectiveFocusSeconds: number   // focused seconds for currently active objective in this work block
   graceSecondsLeft: number
   procrastinationSeconds: number   // counts up after grace expires
   isBreakPaused?: boolean
@@ -154,6 +155,7 @@ export const IPC = {
   TIMER_SKIP: 'timer:skip',
   TIMER_EXTEND_BREAK: 'timer:extend-break',
   TIMER_RESET: 'timer:reset',
+  TIMER_SET_OBJECTIVE: 'timer:set-objective',
 
   // Store
   STORE_GET: 'store:get',

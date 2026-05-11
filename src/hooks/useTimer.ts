@@ -39,6 +39,7 @@ export function useTimerActions() {
   const resume      = useCallback(() => window.tubemato.timer.resume(), [])
   const skip        = useCallback(() => window.tubemato.timer.skip(), [])
   const extendBreak = useCallback(() => window.tubemato.timer.extendBreak(), [])
+  const setObjective = useCallback((objectiveId?: string) => window.tubemato.timer.setObjective(objectiveId), [])
 
-  return { start, pause, resume, skip, extendBreak }
+  return { start, pause, resume, skip, extendBreak, setObjective }
 }

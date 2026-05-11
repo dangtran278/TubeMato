@@ -21,6 +21,7 @@ interface TubematoAPI {
     skip: () => void
     extendBreak: () => void
     reset: () => void
+    setObjective: (objectiveId?: string) => void
     onTick: (cb: (session: TimerSession) => void) => UnsubFn
     onBell: (cb: (type: string) => void) => UnsubFn
   }

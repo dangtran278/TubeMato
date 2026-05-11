@@ -141,7 +141,19 @@ export default function TimerView() {
   const { session } = useTimerStore()
   const { settings } = useSettingsStore()
   const [activeObjectiveId, setActiveObjectiveId] = useState<string | undefined>()
-  const { start, pause, resume, skip, extendBreak } = useTimerActions()
+  const { start, pause, resume, skip, extendBreak, setObjective } = useTimerActions()
+
+  function handleObjectiveChange(id?: string) {
+    setActiveObjectiveId(id)
+    if (
+      session.state === 'running' ||
+      session.state === 'paused' ||
+      session.state === 'break-short' ||
+      session.state === 'break-long'
+    ) {
+      setObjective(id)
+    }
+  }
 
   const progress = session.totalSeconds > 0 ? session.secondsLeft / session.totalSeconds : 0
   const onBreak = isBreak(session.state)
@@ -184,7 +196,7 @@ export default function TimerView() {
       {/* Controls */}
       <div className="timer-controls">
         {session.state === 'idle' && (
-          <button className="btn btn-primary btn-lg" onClick={() => start(activeObjectiveId)}>
+          <button className="btn btn-primary btn-lg" onClick={() => start(session.activeObjectiveId ?? activeObjectiveId)}>
             ▶ Start Focus
           </button>
         )}
@@ -215,7 +227,10 @@ export default function TimerView() {
 
       {(session.state === 'idle' || session.state === 'running' || session.state === 'paused') && (
         <div className="timer-objective-selector">
-          <ObjectiveSelector value={activeObjectiveId} onChange={setActiveObjectiveId} />
+          <ObjectiveSelector
+            value={session.activeObjectiveId ?? activeObjectiveId}
+            onChange={handleObjectiveChange}
+          />
         </div>
       )}
 

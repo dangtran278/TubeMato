@@ -363,6 +363,7 @@ function registerIPC() {
   })
   ipcMain.on(IPC.TIMER_EXTEND_BREAK, () => timer.extendBreak())
   ipcMain.on(IPC.TIMER_RESET, () => timer.reset())
+  ipcMain.on(IPC.TIMER_SET_OBJECTIVE, (_, objectiveId?: string) => timer.setActiveObjective(objectiveId))
 
   // Settings
   ipcMain.handle(IPC.STORE_GET, (_, key: string) => store.get(key as any))
@@ -376,7 +377,13 @@ function registerIPC() {
   })
 
   ipcMain.handle(IPC.OBJECTIVES_GET, () => store.get('objectives'))
-  ipcMain.handle(IPC.OBJECTIVES_SET, (_, objectives: Objective[]) => store.set('objectives', objectives))
+  ipcMain.handle(IPC.OBJECTIVES_SET, (_, objectives: Objective[]) => {
+    store.set('objectives', objectives)
+    const activeId = timer.getSession().activeObjectiveId
+    if (!activeId) return
+    const stillSelectable = objectives.some(o => o.id === activeId && !o.archived)
+    if (!stillSelectable) timer.setActiveObjective(undefined)
+  })
   ipcMain.handle(IPC.OBJECTIVES_CHECKIN, (_, objectiveId: string) => {
     const objective = store.get('objectives').find((o: Objective) => o.id === objectiveId)
     if (!objective) return

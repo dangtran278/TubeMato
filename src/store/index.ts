@@ -15,6 +15,7 @@ export const useTimerStore = create<TimerStore>(set => ({
     secondsLeft: DEFAULT_SETTINGS.workDuration,
     totalSeconds: DEFAULT_SETTINGS.workDuration,
     sessionCount: 0,
+    objectiveFocusSeconds: 0,
     graceSecondsLeft: 0,
     procrastinationSeconds: 0,
   },

@@ -53,7 +53,8 @@ export function objectiveCardTone(o: Objective, completions: number, today: stri
 }
 
 /**
- * Focus time from completed pomodoro sessions only (logged work blocks), not breaks.
+ * Focus time from completed work sessions only (not breaks / grace / overdue).
+ * Each session's `durationMinutes` is active time in the `running` state (pause excluded).
  * One-time: all history. Repeating: current period only ([periodStart, periodEndExclusive)).
  */
 export function sumFocusMinutesForObjective(

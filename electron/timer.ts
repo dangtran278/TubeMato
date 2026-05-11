@@ -14,6 +14,8 @@ export class TimerEngine {
   private procrastinationInterval: ReturnType<typeof setInterval> | null = null
   private procrastinationStart: Date | null = null
   private workSessionStart: Date = new Date()
+  /** Seconds spent in `running` this work block only (excludes pause, break, grace, overdue). */
+  private activeFocusSeconds = 0
 
   public onTick: TickCallback = () => {}
   public onBell: BellCallback = () => {}
@@ -31,6 +33,7 @@ export class TimerEngine {
       secondsLeft: this.settings.workDuration,   // now stored in seconds
       totalSeconds: this.settings.workDuration,
       sessionCount: 0,
+      objectiveFocusSeconds: 0,
       graceSecondsLeft: 0,
       procrastinationSeconds: 0,
     }
@@ -44,9 +47,11 @@ export class TimerEngine {
 
   start(objectiveId?: string) {
     if (this.session.state !== 'idle') return
+    this.activeFocusSeconds = 0
     this.workSessionStart = new Date()
     this.session.state = 'running'
     this.session.activeObjectiveId = objectiveId
+    this.session.objectiveFocusSeconds = 0
     this.fadeTriggered = false
     this.onBell('work-start')
     this.startTick()
@@ -120,7 +125,16 @@ export class TimerEngine {
     this.stopTick()
     this.stopGrace()
     this.endProcrastination()
+    this.activeFocusSeconds = 0
     this.session = this.buildIdle()
+    this.onTick(this.getSession())
+  }
+
+  setActiveObjective(objectiveId?: string) {
+    if (this.session.activeObjectiveId !== objectiveId) {
+      this.session.objectiveFocusSeconds = 0
+    }
+    this.session.activeObjectiveId = objectiveId
     this.onTick(this.getSession())
   }
 
@@ -136,6 +150,10 @@ export class TimerEngine {
   }
 
   private tick() {
+    if (this.session.state === 'running') {
+      this.activeFocusSeconds++
+      if (this.session.activeObjectiveId) this.session.objectiveFocusSeconds++
+    }
     this.session.secondsLeft--
     this.onTick(this.getSession())
 
@@ -158,14 +176,18 @@ export class TimerEngine {
   // ─── Work session completion ────────────────────────────────────────────────
 
   private endWorkSession(completed: boolean) {
-    if (completed) {
+    // Persist any focused work, even when the user ends the block early (skip while running/paused).
+    if (this.activeFocusSeconds > 0) {
+      const focusMinutes = Math.max(1, Math.round(this.activeFocusSeconds / 60))
       logSession({
         startAt: this.workSessionStart.toISOString(),
         endAt: new Date().toISOString(),
         objectiveId: this.session.activeObjectiveId,
         date: today(),
-        durationMinutes: Math.round(this.settings.workDuration / 60),
+        durationMinutes: focusMinutes,
       })
+    }
+    if (completed) {
       this.session.sessionCount++
     }
 
@@ -213,8 +235,10 @@ export class TimerEngine {
     this.fadeTriggered = false
     this.onBell('work-start')
     const workDuration = this.settings.workDuration
+    this.activeFocusSeconds = 0
     this.workSessionStart = new Date()
     this.session.state = 'running'
+    this.session.objectiveFocusSeconds = 0
     this.session.secondsLeft = workDuration
     this.session.totalSeconds = workDuration
     this.session.procrastinationSeconds = 0

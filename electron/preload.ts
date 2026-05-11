@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('tubemato', {
     skip: () => ipcRenderer.send(IPC.TIMER_SKIP),
     extendBreak: () => ipcRenderer.send(IPC.TIMER_EXTEND_BREAK),
     reset: () => ipcRenderer.send(IPC.TIMER_RESET),
+    setObjective: (objectiveId?: string) => ipcRenderer.send(IPC.TIMER_SET_OBJECTIVE, objectiveId),
     onTick: (cb: (session: TimerSession) => void) => {
       const handler = (_: Electron.IpcRendererEvent, session: TimerSession) => cb(session)
       ipcRenderer.on(IPC.TIMER_TICK, handler)
