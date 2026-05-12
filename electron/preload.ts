@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld('tubemato', {
       ipcRenderer.invoke(IPC.BRIDGE_EXTENSION_PATH),
     openBridgeExtensionFolder: (): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke(IPC.BRIDGE_EXTENSION_OPEN_FOLDER),
+    getBridgeStatus: (): Promise<{ server: boolean; extensionOk: boolean }> =>
+      ipcRenderer.invoke(IPC.BRIDGE_STATUS),
   },
 })
 

@@ -13,6 +13,46 @@
   font-size: 14px;
 }
 
+/* Objective modal — even columns for type + timer overrides */
+.objective-form__row2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+.objective-form__timer-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+.objective-form__field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.objective-form__timer-row .input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+}
+
+.objective-form__timer-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.objective-form__save-error {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--danger);
+  margin: 0;
+}
+
 .objective-card {
   display: flex;
   flex-direction: column;
@@ -71,6 +111,17 @@
 }
 
 .objective-card--met { border-color: rgba(74, 222, 128, 0.2); }
+
+/* Subtle — timer overrides global Settings when this objective is selected */
+.badge-timer-override {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  background: var(--bg-overlay);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  opacity: 0.92;
+}
 
 /* One-time: deadline passed, not completed — heavy / threatening */
 .objective-card--tone-overdue {

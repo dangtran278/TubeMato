@@ -2,7 +2,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
-  max-width: 640px;
+  width: 100%;
+  max-width: min(44rem, calc(100vw - 2rem));
+  margin-inline: auto;
+  padding-inline: var(--sp-2);
+  box-sizing: border-box;
 }
 
 .settings-section {
@@ -28,9 +32,10 @@
 
 .settings-row {
   display: flex;
-  align-items: center;
+  flex-direction: row;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--sp-4);
+  gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-5);
   border-bottom: 1px solid var(--border);
   transition: background var(--dur-fast) var(--ease);
@@ -39,6 +44,8 @@
 .settings-row:hover { background: var(--bg-elevated); }
 
 .settings-row__meta {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -56,7 +63,39 @@
 }
 
 .settings-row__control {
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: min(22rem, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.settings-select-wide {
+  width: 100%;
+  max-width: 22rem;
+  min-width: 0;
+}
+
+.settings-tz-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: 22rem;
+}
+
+.settings-tz-offset {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-align: right;
+  line-height: 1.35;
+  width: 100%;
+  word-break: break-all;
 }
 
 .settings-num {
@@ -99,6 +138,14 @@
 /* ─── Footer ─────────────────────────────────────────────────────────────────── */
 .settings-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
   padding-top: var(--sp-2);
+}
+
+.settings-save-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }

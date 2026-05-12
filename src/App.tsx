@@ -60,7 +60,7 @@ export default function App() {
 
       <div className="sidebar">
         <div className="sidebar__logo" aria-hidden>
-          <img src={appIcon} alt="" width={36} height={36} />
+          <img src={appIcon} alt="" width={36} height={36} draggable={false} />
         </div>
         <nav className="sidebar__nav">
           {NAV.map(item => (

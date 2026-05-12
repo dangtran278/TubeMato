@@ -13,6 +13,11 @@
   justify-content: center;
 }
 
+/* Phase pill above ring — keep tight to circle */
+.timer-view--centered > .timer-label.badge {
+  margin-bottom: var(--sp-1);
+}
+
 /* ─── Ring ───────────────────────────────────────────────────────────────────── */
 .timer-ring-wrapper {
   position: relative;
@@ -43,6 +48,15 @@
   letter-spacing: -0.02em;
   color: var(--text-primary);
   line-height: 1;
+}
+
+.timer-countdown--alert {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.timer-countdown--mono {
+  font-family: var(--font-mono);
 }
 
 /* ─── Session dots ───────────────────────────────────────────────────────────── */
@@ -76,12 +90,6 @@
   justify-content: center;
 }
 
-.btn-lg {
-  padding: var(--sp-3) var(--sp-6);
-  font-size: 15px;
-  border-radius: var(--r-lg);
-}
-
 .timer-objective-selector {
   width: 280px;
 }
@@ -94,43 +102,6 @@
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px;
-}
-
-/* ─── Grace / overdue overlay ───────────────────────────────────────────────── */
-.grace-overlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.grace-overlay__label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.grace-overlay__countdown {
-  font-size: 52px;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--danger);
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: clip;
-}
-
-.grace-overlay__actions {
-  display: flex;
-  gap: var(--sp-2);
-  flex-direction: column;
-  width: 100%;
 }
 
 /* ─── YouTube bridge hint ────────────────────────────────────────────────────── */

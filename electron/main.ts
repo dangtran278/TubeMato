@@ -1,6 +1,6 @@
 import {
   app, BrowserWindow, Tray, Menu, nativeImage,
-  ipcMain, shell,
+  ipcMain, shell, Notification,
 } from 'electron'
 import http from 'http'
 import path from 'path'
@@ -11,6 +11,7 @@ import { TimerEngine } from './timer'
 import { IPC } from './types'
 import { buildDaySummary, checkObjectiveReminders } from './scheduler'
 import type { Objective, TimerSession } from './types'
+import { wallClockHourMinute, calendarDateKey, resolveTimeZone } from './calendarDate'
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -179,9 +180,15 @@ function createWidgetWindow() {
 // Requests from the extension origin bypass Chrome's Private Network Access.
 
 const YT_PORT = 27182
+/** Long-poll timeout is 25s; allow slack so one missed poll does not flicker UI. */
+const YT_BRIDGE_ALIVE_MS = 32_000
+
 type YtCmd = { type: string; duration?: number; targetVolume?: number }
 const cmdQueue: YtCmd[] = []
 const cmdWaiters: Array<(cmd: YtCmd | null) => void> = []
+
+let ytCommandServerListening = false
+let lastYtBridgeRequestAt = 0
 
 function createCommandServer() {
   const server = http.createServer((req, res) => {
@@ -192,6 +199,7 @@ function createCommandServer() {
     if (req.method === 'OPTIONS') { res.writeHead(204).end(); return }
 
     if (req.method === 'GET' && req.url === '/command') {
+      lastYtBridgeRequestAt = Date.now()
       req.socket?.setTimeout(0)
 
       if (cmdQueue.length > 0) {
@@ -235,9 +243,11 @@ function createCommandServer() {
   })
 
   server.listen(YT_PORT, '127.0.0.1', () => {
+    ytCommandServerListening = true
     if (isDev) console.log(`[TubeMato] YouTube bridge on 127.0.0.1:${YT_PORT}`)
   })
   server.on('error', (e: NodeJS.ErrnoException) => {
+    ytCommandServerListening = false
     if (e.code === 'EADDRINUSE')
       console.warn(`[TubeMato] Port ${YT_PORT} in use — YouTube bridge inactive.`)
   })
@@ -397,10 +407,11 @@ async function applyAutoLaunch() {
 function scheduleEndOfDayCheck() {
   setInterval(() => {
     checkObjectiveReminders()
-    const summaryTime = store.get('settings').summaryTime
-    const [h, m] = summaryTime.split(':').map(Number)
+    const s = store.get('settings')
+    const [h, m] = s.summaryTime.split(':').map(Number)
     const now = new Date()
-    if (now.getHours() === h && now.getMinutes() === m) {
+    const { hour, minute } = wallClockHourMinute(now, resolveTimeZone(s.calendarTimeZone))
+    if (hour === h && minute === m) {
       triggerDaySummary()
     }
   }, 60_000)
@@ -409,12 +420,21 @@ function scheduleEndOfDayCheck() {
 function triggerDaySummary() {
   const summary = buildDaySummary()
   const session = timer.getSession()
-  const isOnBreak = session.state.startsWith('break') || session.state === 'grace'
+  /** Don’t pop a modal over an active work / paused pomodoro block. */
+  const inFocusWork = session.state === 'running' || session.state === 'paused'
+  const canPopup = Boolean(mainWindow?.isVisible() && !inFocusWork)
 
-  if (mainWindow?.isVisible() && isOnBreak) {
-    mainWindow.webContents.send('summary:show', summary)
+  if (canPopup) {
+    mainWindow!.webContents.send('summary:show', summary)
   } else {
     store.set('pendingSummary', summary)
+    const st = store.get('settings')
+    if (st.notifyDailySummary !== false && Notification.isSupported()) {
+      new Notification({
+        title: '🍅 TubeMato — Daily summary',
+        body: `${summary.date}: ${summary.pomodorosCompleted} pomodoros, ${summary.totalFocusMinutes}m focus. Open the app to view.`,
+      }).show()
+    }
   }
 }
 
@@ -453,9 +473,11 @@ function registerIPC() {
   ipcMain.handle(IPC.OBJECTIVES_SET, (_, objectives: Objective[]) => {
     store.set('objectives', objectives)
     const activeId = timer.getSession().activeObjectiveId
-    if (!activeId) return
-    const stillSelectable = objectives.some(o => o.id === activeId && !o.archived)
-    if (!stillSelectable) timer.setActiveObjective(undefined)
+    if (activeId && !objectives.some(o => o.id === activeId && !o.archived)) {
+      timer.setActiveObjective(undefined)
+    } else {
+      timer.refreshIdleWorkPreview()
+    }
   })
   ipcMain.handle(IPC.OBJECTIVES_CHECKIN, (_, objectiveId: string) => {
     const objective = store.get('objectives').find((o: Objective) => o.id === objectiveId)
@@ -463,7 +485,7 @@ function registerIPC() {
     logObjectiveCompletion({
       objectiveId,
       completedAt: new Date().toISOString(),
-      periodStart: objective.periodStart ?? new Date().toISOString().slice(0, 10),
+      periodStart: objective.periodStart ?? calendarDateKey(new Date(), resolveTimeZone(store.get('settings').calendarTimeZone)),
     })
   })
 
@@ -507,4 +529,11 @@ function registerIPC() {
     const err = await shell.openPath(dir)
     return err === '' ? { ok: true as const } : { ok: false as const, error: err }
   })
+
+  ipcMain.handle(IPC.BRIDGE_STATUS, () => ({
+    server: ytCommandServerListening,
+    extensionOk:
+      ytCommandServerListening &&
+      Date.now() - lastYtBridgeRequestAt < YT_BRIDGE_ALIVE_MS,
+  }))
 }

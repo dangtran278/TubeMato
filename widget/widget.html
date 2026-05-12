@@ -95,9 +95,19 @@
         border: 1px solid rgba(255,255,255,0.08);
         color: #9898b0;
         font-size: 12px;
+        line-height: 1;
         cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
         transition: all 120ms ease;
+      }
+      /* Geometric symbols sit low vs "+1"; asymmetric padding shifts glyph without breaking flex center */
+      .widget__btn--glyph {
+        padding-bottom: 2px;
+        padding-top: 0;
+        font-size: 13px;
       }
       .widget__btn:hover {
         background: rgba(255,255,255,0.12);
@@ -116,6 +126,10 @@
       }
       .widget__btn--warn:hover { background: rgba(248,113,113,0.3); }
 
+      .widget__btn--extend { display: none; }
+      .widget__btn--extend.is-visible { display: flex; }
+      .widget__btn--hidden { display: none !important; }
+
       @keyframes flash { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
     </style>
   </head>
@@ -127,9 +141,9 @@
         <div class="widget__dots" id="dots"></div>
       </div>
       <div class="widget__controls">
-        <button class="widget__btn widget__btn--primary" id="btn-play" onclick="handlePlay()">▶</button>
-        <button class="widget__btn" id="btn-skip" onclick="handleSkip()">⏭</button>
-        <button class="widget__btn" id="btn-extend" onclick="handleExtend()" style="display:none">+1</button>
+        <button class="widget__btn widget__btn--glyph widget__btn--primary" id="btn-play" onclick="handlePlay()">▶</button>
+        <button class="widget__btn widget__btn--glyph" id="btn-skip" onclick="handleSkip()">⏭</button>
+        <button class="widget__btn widget__btn--extend" id="btn-extend" onclick="handleExtend()">+1</button>
       </div>
     </div>
 
@@ -201,20 +215,19 @@
         // ── Play button ────────────────────────────────────────────────────────
         if (state === 'running' || (isBreak && !session.isBreakPaused)) {
           btnPlay.textContent = '⏸'
-          btnPlay.className = 'widget__btn'
+          btnPlay.className = 'widget__btn widget__btn--glyph'
         } else if (isGrace || isProc) {
           // Highlighted "Start Work" button
           btnPlay.textContent = '▶'
-          btnPlay.className = 'widget__btn widget__btn--warn'
+          btnPlay.className = 'widget__btn widget__btn--glyph widget__btn--warn'
         } else {
           btnPlay.textContent = '▶'
-          btnPlay.className = 'widget__btn widget__btn--primary'
+          btnPlay.className = 'widget__btn widget__btn--glyph widget__btn--primary'
         }
 
-        // ── Extend / skip ──────────────────────────────────────────────────────
-        btnExtend.style.display = (isBreak || isGrace || isProc) ? 'flex' : 'none'
-        // Hide skip button if idle, OR if we are in grace/overdue since btnPlay does the same thing
-        btnSkip.style.display   = (state === 'idle' || isGrace || isProc) ? 'none' : 'flex'
+        // ── Extend / skip (use classes — inline display:flex broke flex centering vs stylesheet) ──
+        btnExtend.classList.toggle('is-visible', isBreak || isGrace || isProc)
+        btnSkip.classList.toggle('widget__btn--hidden', state === 'idle' || isGrace || isProc)
       }
 
       function handlePlay() {

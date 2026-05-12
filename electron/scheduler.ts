@@ -1,24 +1,119 @@
 import { Notification } from 'electron'
 import { store, getCurrentLog } from './store'
-import type { DaySummary, Objective, ObjectiveLog, ObjectiveProgress } from './types'
+import {
+  calendarDateKey,
+  previousCalendarDateKey,
+  resolveTimeZone,
+} from './calendarDate'
+import type {
+  DaySummary,
+  Objective,
+  ObjectiveLog,
+  ObjectiveProgress,
+  PomodoroSessionRecord,
+  BreakExtension,
+  ProcrastinationEvent,
+  Settings,
+} from './types'
+
+/**
+ * Bell-completed pomodoro with focus — summary “pomodoro count”.
+ * Legacy rows omit `naturalComplete` → treated as completed.
+ */
+function countsAsFinishedPomodoro(s: PomodoroSessionRecord): boolean {
+  if (s.durationMinutes <= 0) return false
+  return s.naturalComplete !== false
+}
+
+/** Work block end that breaks streak (skip work, pause during work, empty / zero-time end). */
+function isDirtyWorkEndForStreak(s: PomodoroSessionRecord): boolean {
+  if (s.durationMinutes <= 0) return true
+  if (s.naturalComplete === false) return true
+  return Boolean(s.hadPauseDuringWork)
+}
+
+/** +1 streak at work `endAt` (bell finished, no pause while running). */
+function isGoodStreakIncrement(s: PomodoroSessionRecord): boolean {
+  if (s.durationMinutes <= 0) return false
+  if (s.naturalComplete === false) return false
+  return !s.hadPauseDuringWork
+}
+
+/**
+ * Longest streak of bell-finished, no–work-pause pomodoros from **logged events only**
+ * (no comparison to global `workDuration` — future per-objective lengths stay compatible).
+ *
+ * Resets: break extension; procrastination start (past grace); pause during break / grace / overdue wait
+ * (`hadPauseDuringInterWorkGapBefore` → reset at that work block’s `startAt`); skip work; pause during work.
+ * Skip-break does not log and does not reset.
+ */
+function longestPomodoroStreakFromLog(
+  sessions: PomodoroSessionRecord[],
+  extensions: Pick<BreakExtension, 'timestamp'>[],
+  procrastination: Pick<ProcrastinationEvent, 'startAt'>[],
+): number {
+  type Ev = { t: number; pri: number; kind: 'reset' | 'inc' }
+  const ev: Ev[] = []
+
+  for (const e of extensions) {
+    const t = Date.parse(e.timestamp)
+    if (!Number.isNaN(t)) ev.push({ t, pri: 0, kind: 'reset' })
+  }
+  for (const p of procrastination) {
+    const t = Date.parse(p.startAt)
+    if (!Number.isNaN(t)) ev.push({ t, pri: 1, kind: 'reset' })
+  }
+  for (const s of sessions) {
+    const ts = Date.parse(s.startAt)
+    if (!Number.isNaN(ts) && s.hadPauseDuringInterWorkGapBefore) {
+      ev.push({ t: ts, pri: 2, kind: 'reset' })
+    }
+  }
+  for (const s of sessions) {
+    const te = Date.parse(s.endAt)
+    if (Number.isNaN(te)) continue
+    if (isGoodStreakIncrement(s)) ev.push({ t: te, pri: 4, kind: 'inc' })
+    else if (isDirtyWorkEndForStreak(s)) ev.push({ t: te, pri: 3, kind: 'reset' })
+  }
+
+  ev.sort((a, b) => (a.t !== b.t ? a.t - b.t : a.pri - b.pri))
+
+  let cur = 0
+  let best = 0
+  for (const e of ev) {
+    if (e.kind === 'reset') cur = 0
+    else {
+      cur++
+      best = Math.max(best, cur)
+    }
+  }
+  return best
+}
 
 // ─── Build end-of-day summary ─────────────────────────────────────────────────
 
+/**
+ * Summarizes the **previous calendar day** in the user’s `calendarTimeZone`
+ * (same `YYYY-MM-DD` keys as logs for that zone).
+ */
 export function buildDaySummary(): DaySummary {
-  const date = new Date().toISOString().slice(0, 10)
+  const settings = store.get('settings') as Settings
+  const tz = resolveTimeZone(settings.calendarTimeZone)
+  const date = previousCalendarDateKey(new Date(), tz)
   const log = getCurrentLog()
 
-  const todaySessions = log.sessions.filter(s => s.date === date)
-  const todayProc = log.procrastinationEvents.filter(e => e.date === date)
-  const todayExt = log.breakExtensions.filter(e => e.date === date)
+  const sessionsThatDay = log.sessions.filter(s => s.date === date)
+  const procThatDay = log.procrastinationEvents.filter(e => e.date === date)
+  const extThatDay = log.breakExtensions.filter(e => e.date === date)
 
-  const totalFocusMinutes = todaySessions.reduce((acc, s) => acc + s.durationMinutes, 0)
-  const pomodorosCompleted = todaySessions.length
-  const procrastinationMinutes = Math.round(todayProc.reduce((acc, e) => acc + e.durationSeconds, 0) / 60)
-  const breakExtensionMinutes = todayExt.reduce((acc, e) => acc + e.minutesAdded, 0)
+  const totalFocusMinutes = sessionsThatDay.reduce((acc, s) => acc + s.durationMinutes, 0)
+  const pomodorosCompleted = sessionsThatDay.filter(countsAsFinishedPomodoro).length
+  const longestPomodoroStreak = longestPomodoroStreakFromLog(sessionsThatDay, extThatDay, procThatDay)
+  const procrastinationMinutes = Math.round(procThatDay.reduce((acc, e) => acc + e.durationSeconds, 0) / 60)
+  const breakExtensionMinutes = extThatDay.reduce((acc, e) => acc + e.minutesAdded, 0)
 
   const objectiveCheckinsToday = log.objectiveLogs.filter(
-    l => l.completedAt.slice(0, 10) === date
+    l => calendarDateKey(new Date(l.completedAt), tz) === date,
   ).length
 
   const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
@@ -38,8 +133,10 @@ export function buildDaySummary(): DaySummary {
 
   return {
     date,
+    calendarTimeZone: tz,
     totalFocusMinutes,
     pomodorosCompleted,
+    longestPomodoroStreak,
     objectiveCheckinsToday,
     procrastinationMinutes,
     breakExtensionMinutes,
@@ -68,7 +165,8 @@ function isObjectiveDueToday(objective: Objective, today: string): boolean {
 }
 
 function countCompletionsForCurrentPeriod(objective: Objective, objectiveLogs: ObjectiveLog[]): number {
-  const periodStart = objective.periodStart ?? new Date().toISOString().slice(0, 10)
+  const tz = resolveTimeZone(store.get('settings').calendarTimeZone)
+  const periodStart = objective.periodStart ?? calendarDateKey(new Date(), tz)
   return objectiveLogs.filter(
     gl => gl.objectiveId === objective.id && gl.periodStart === periodStart
   ).length
@@ -194,9 +292,15 @@ function alreadySentToday(objectiveId: string, today: string): boolean {
 // Called every minute from main.ts — at most one notification per objective per calendar day.
 
 export function checkObjectiveReminders() {
-  const today = new Date().toISOString().slice(0, 10)
+  const settings = store.get('settings') as Settings
+  if (settings.notifyObjectiveReminders === false) return
+
+  const tz = resolveTimeZone(settings.calendarTimeZone)
+  const today = calendarDateKey(new Date(), tz)
   const log = getCurrentLog()
   const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
+
+  const pending: { id: string; title: string; body: string }[] = []
 
   for (const objective of objectives) {
     const completed = countCompletionsForCurrentPeriod(objective, log.objectiveLogs)
@@ -205,23 +309,30 @@ export function checkObjectiveReminders() {
 
     const impossible = getImpossibleMessage(objective, completed, today)
     if (impossible) {
-      sendReminder(objective.title, impossible)
-      recordReminderSent(objective.id, today)
+      pending.push({ id: objective.id, title: objective.title, body: impossible })
       continue
     }
 
     if (reminderEligible(objective, completed, today)) {
-      sendReminder(
-        objective.title,
-        `${completed}/${objective.targetCompletions} completed — don't forget to check in!`
-      )
-      recordReminderSent(objective.id, today)
+      pending.push({
+        id: objective.id,
+        title: objective.title,
+        body: `${completed}/${objective.targetCompletions} completed — don't forget to check in!`,
+      })
     }
   }
-}
 
-function sendReminder(objectiveTitle: string, body: string) {
-  if (Notification.isSupported()) {
-    new Notification({ title: `🍅 TubeMato: ${objectiveTitle}`, body }).show()
+  if (pending.length === 0) return
+  if (!Notification.isSupported()) {
+    for (const p of pending) recordReminderSent(p.id, today)
+    return
   }
+
+  let body = pending.map(p => `• ${p.title}: ${p.body}`).join('\n')
+  if (body.length > 480) body = `${body.slice(0, 477)}…`
+  new Notification({
+    title: `🍅 TubeMato — ${pending.length} objective reminder${pending.length === 1 ? '' : 's'}`,
+    body,
+  }).show()
+  for (const p of pending) recordReminderSent(p.id, today)
 }

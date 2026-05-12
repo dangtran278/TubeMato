@@ -31,6 +31,15 @@ export function objectiveDeadlineSortKey(o: Objective): string {
   return repeatingPeriodEndDate(o) ?? o.periodStart ?? '9999-12-31'
 }
 
+/** Objective saves optional work / break lengths that override global Settings when selected. */
+export function objectiveHasCustomTimer(o: Objective): boolean {
+  return (
+    typeof o.workDuration === 'number' ||
+    typeof o.shortBreakDuration === 'number' ||
+    typeof o.longBreakDuration === 'number'
+  )
+}
+
 export function sortActiveObjectives(list: Objective[]): Objective[] {
   return [...list].sort((a, b) => {
     const rank = (x: Objective) => (x.type === 'one-time' ? 0 : 1)

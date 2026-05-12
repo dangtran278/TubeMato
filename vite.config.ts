@@ -39,10 +39,15 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@electron/types': path.resolve(__dirname, 'electron/types.ts'),
+      '@electron/calendarDate': path.resolve(__dirname, 'electron/calendarDate.ts'),
     },
   },
   // Multi-page: main app + floating widget
   build: {
+    // Prevent Vite from deleting packaged artifacts under `dist/win-unpacked`
+    // when a previous package/build is still locked by Electron/Windows.
+    emptyOutDir: false,
     rollupOptions: {
       input: {
         main:   path.resolve(__dirname, 'index.html'),

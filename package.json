@@ -1,13 +1,13 @@
 {
   "name": "tubemato",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lightweight Pomodoro timer with YouTube integration and productivity tracking",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "electron:dev": "vite",
-    "electron:build": "npm run build && electron-builder",
+    "electron:build": "npm run build && electron-builder --win nsis --x64",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js",
     "generate-extension-icons": "node scripts/generate-extension-icons.js",
@@ -40,6 +40,9 @@
   "build": {
     "appId": "com.tubemato.app",
     "productName": "TubeMato",
+    "directories": {
+      "output": "release"
+    },
     "icon": "assets/icons/icon256.png",
     "asarUnpack": [
       "assets/icons/**"
@@ -61,7 +64,9 @@
       {
         "from": "extension",
         "to": "tubemato-youtube-bridge",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   }

@@ -15,6 +15,7 @@ import type {
   LogRollPeriod,
 } from './types'
 import { DEFAULT_SETTINGS } from './types'
+import { calendarDateKey, defaultTimeZone, resolveTimeZone } from './calendarDate'
 
 // ─── Main persistent store ────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ export const store = new Store<StoreSchema>({
     settings: DEFAULT_SETTINGS,
     objectives: [],
     pendingSummary: null,
-    currentLogPeriod: getPeriodLabel(new Date(), DEFAULT_SETTINGS.logRollPeriod),
+    currentLogPeriod: getPeriodLabel(new Date(), DEFAULT_SETTINGS.logRollPeriod, DEFAULT_SETTINGS.calendarTimeZone),
     objectiveReminderLastSent: {},
   },
 })
@@ -53,6 +54,25 @@ function migrateLegacyStore() {
 }
 migrateLegacyStore()
 
+function migrateSettingsShape() {
+  const s = store.get('settings')
+  const patch: Partial<Settings> = {}
+  if (typeof s.calendarTimeZone !== 'string' || !s.calendarTimeZone.trim()) {
+    patch.calendarTimeZone = defaultTimeZone()
+  } else {
+    patch.calendarTimeZone = resolveTimeZone(s.calendarTimeZone)
+  }
+  if (s.notifyObjectiveReminders === undefined) patch.notifyObjectiveReminders = true
+  if (s.notifyDailySummary === undefined) patch.notifyDailySummary = true
+  if (s.notifyProcrastinationNudge === undefined) patch.notifyProcrastinationNudge = true
+  // Renamed roll period (same half-year labels as before)
+  if ((s as { logRollPeriod?: string }).logRollPeriod === '2-monthly') {
+    patch.logRollPeriod = 'semiannual'
+  }
+  if (Object.keys(patch).length) store.set('settings', { ...s, ...patch })
+}
+migrateSettingsShape()
+
 // ─── Log file helpers ─────────────────────────────────────────────────────────
 
 function getLogsDir(): string {
@@ -65,13 +85,14 @@ function logFilePath(period: string): string {
   return path.join(getLogsDir(), `log-${period}.json`)
 }
 
-export function getPeriodLabel(date: Date, rollPeriod: LogRollPeriod): string {
-  const y = date.getFullYear()
-  const m = date.getMonth() + 1 // 1-indexed
+export function getPeriodLabel(date: Date, rollPeriod: LogRollPeriod, timeZone: string): string {
+  const key = calendarDateKey(date, timeZone)
+  const y = Number(key.slice(0, 4))
+  const m = Number(key.slice(5, 7))
   switch (rollPeriod) {
     case 'monthly':
       return `${y}-${String(m).padStart(2, '0')}`
-    case '2-monthly':
+    case 'semiannual':
       return `${y}-${m <= 6 ? 'H1' : 'H2'}`
     case 'quarterly': {
       const q = Math.ceil(m / 3)
@@ -99,6 +120,10 @@ function normalizeLogFile(data: unknown, periodFallback: string): LogFile {
         date: String(s.date ?? ''),
         durationMinutes: Number(s.durationMinutes ?? 0),
         objectiveId: (s.objectiveId ?? s.taskId) as string | undefined,
+        naturalComplete: typeof s.naturalComplete === 'boolean' ? s.naturalComplete : undefined,
+        hadPauseDuringWork: typeof s.hadPauseDuringWork === 'boolean' ? s.hadPauseDuringWork : undefined,
+        hadPauseDuringInterWorkGapBefore:
+          typeof s.hadPauseDuringInterWorkGapBefore === 'boolean' ? s.hadPauseDuringInterWorkGapBefore : undefined,
       }))
     : []
 
@@ -158,7 +183,8 @@ export function writeLog(log: LogFile): void {
 
 export function getCurrentLog(): LogFile {
   const settings = store.get('settings')
-  const period = getPeriodLabel(new Date(), settings.logRollPeriod)
+  const tz = resolveTimeZone(settings.calendarTimeZone)
+  const period = getPeriodLabel(new Date(), settings.logRollPeriod, tz)
   // Roll if period changed
   const stored = store.get('currentLogPeriod')
   if (stored !== period) store.set('currentLogPeriod', period)
