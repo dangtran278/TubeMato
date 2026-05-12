@@ -8,13 +8,14 @@ import SettingsView from './components/Settings/SettingsView'
 type View = 'timer' | 'objectives' | 'analytics' | 'settings'
 
 const NAV: { id: View; icon: string; label: string }[] = [
-  { id: 'timer',      icon: '🍅', label: 'Timer' },
+  { id: 'timer', icon: '🍅', label: 'Timer' },
   { id: 'objectives', icon: '🎯', label: 'Objectives' },
-  { id: 'analytics',  icon: '📊', label: 'Analytics' },
-  { id: 'settings',   icon: '⚙',  label: 'Settings' },
+  { id: 'analytics', icon: '📊', label: 'Analytics' },
+  { id: 'settings', icon: '⚙️', label: 'Settings' },
 ]
 
 import { useTimerEvents } from './hooks/useTimer'
+import appIcon from '../assets/icons/icon256.png'
 
 export default function App() {
   const [view, setView] = useState<View>('timer')
@@ -58,7 +59,9 @@ export default function App() {
       </div>
 
       <div className="sidebar">
-        <div className="sidebar__logo">🍅</div>
+        <div className="sidebar__logo" aria-hidden>
+          <img src={appIcon} alt="" width={36} height={36} />
+        </div>
         <nav className="sidebar__nav">
           {NAV.map(item => (
             <button
@@ -83,10 +86,10 @@ export default function App() {
       </div>
 
       <div className="main-content">
-        {view === 'timer'      && <TimerView />}
+        {view === 'timer' && <TimerView />}
         {view === 'objectives' && <ObjectivesView />}
-        {view === 'analytics'  && <AnalyticsView />}
-        {view === 'settings'   && <SettingsView />}
+        {view === 'analytics' && <AnalyticsView />}
+        {view === 'settings' && <SettingsView />}
       </div>
     </div>
   )

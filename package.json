@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "electron:dev": "vite",
-    "electron:build": "npm run build && node scripts/generate-extension-icons.js && electron-builder",
+    "electron:build": "npm run build && electron-builder",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js",
-    "generate-extension-icons": "node scripts/generate-extension-icons.js"
+    "generate-extension-icons": "node scripts/generate-extension-icons.js",
+    "bootstrap:icons": "npm run generate-icons && npm run generate-extension-icons"
   },
   "dependencies": {
     "electron-auto-launch": "^5.0.6",
@@ -39,9 +40,13 @@
   "build": {
     "appId": "com.tubemato.app",
     "productName": "TubeMato",
+    "icon": "assets/icons/icon256.png",
+    "asarUnpack": [
+      "assets/icons/**"
+    ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icons/icon.ico"
+      "icon": "assets/icons/icon256.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -49,7 +54,8 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "assets/icons/**/*"
     ],
     "extraResources": [
       {

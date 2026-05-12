@@ -10,7 +10,7 @@ import { store, getCurrentLog, readLog, getLogPeriods, getAllLoggedSessions, log
 import { TimerEngine } from './timer'
 import { IPC } from './types'
 import { buildDaySummary, checkObjectiveReminders } from './scheduler'
-import type { Objective } from './types'
+import type { Objective, TimerSession } from './types'
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -23,12 +23,58 @@ function getBridgeExtensionDir(): string {
   }
   return path.join(__dirname, '../extension')
 }
+
+/** App window / dock: try largest first (your assets: icon{16,32,48,256}.{ico,png} plus legacy icon.*). */
+const APP_ICON_CANDIDATES_WIN = [
+  'icon256.ico', 'icon256.png',
+  'icon48.ico', 'icon48.png',
+  'icon32.ico', 'icon32.png',
+  'icon16.ico', 'icon16.png',
+  'icon.ico', 'icon.png',
+]
+const APP_ICON_CANDIDATES_DEFAULT = [
+  'icon256.png', 'icon256.ico',
+  'icon48.png', 'icon48.ico',
+  'icon32.png', 'icon32.ico',
+  'icon16.png', 'icon16.ico',
+  'icon.png', 'icon.ico',
+]
+
+/** Icons: dev = repo `assets/icons`; packaged = `app.asar.unpacked/assets/icons` when listed in asarUnpack. */
+function getIconsDir(): string {
+  if (!app.isPackaged) {
+    return path.join(__dirname, '../assets/icons')
+  }
+  const unpacked = path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', 'icons')
+  const markers = ['icon256.png', 'icon256.ico', 'icon.png', 'tray-work.png']
+  if (markers.some(f => fs.existsSync(path.join(unpacked, f)))) {
+    return unpacked
+  }
+  return path.join(__dirname, '../assets/icons')
+}
+
+function getAppIconImage(): Electron.NativeImage | undefined {
+  const dir = getIconsDir()
+  const order = process.platform === 'win32' ? APP_ICON_CANDIDATES_WIN : APP_ICON_CANDIDATES_DEFAULT
+  for (const name of order) {
+    const p = path.join(dir, name)
+    if (!fs.existsSync(p)) continue
+    const img = nativeImage.createFromPath(p)
+    if (!img.isEmpty()) return img
+  }
+  console.warn(`[TubeMato] No app icon found under ${dir} (expected icon256.png / icon256.ico or icon16–icon256 set)`)
+  return undefined
+}
 let mainWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 const timer = new TimerEngine()
 
 const autoLauncher = new AutoLaunch({ name: 'TubeMato', isHidden: true })
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.tubemato.app')
+}
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
@@ -68,7 +114,7 @@ function createMainWindow() {
       nodeIntegration: false,
     },
     show: false,
-    icon: path.join(__dirname, '../assets/icons/icon.png'),
+    icon: getAppIconImage(),
   })
 
   if (isDev) {
@@ -110,6 +156,7 @@ function createWidgetWindow() {
       nodeIntegration: false,
     },
     opacity: 0.75,
+    icon: getAppIconImage(),
   })
 
   if (isDev) {
@@ -207,23 +254,40 @@ function sendYtCommand(cmd: YtCmd) {
 
 // ─── Tray ─────────────────────────────────────────────────────────────────────
 
-const TRAY_ICONS: Record<string, string> = {
+const TRAY_FILES: Record<'working' | 'break' | 'paused' | 'idle', string> = {
   working: 'tray-work.png',
   break: 'tray-break.png',
   paused: 'tray-pause.png',
   idle: 'tray-idle.png',
 }
 
-function getTrayIcon(state: string): Electron.NativeImage {
-  const iconName = TRAY_ICONS[
-    state === 'running' ? 'working'
-      : state.startsWith('break') || state === 'grace' ? 'break'
-        : state === 'paused' ? 'paused'
-          : 'idle'
-  ]
-  const iconPath = path.join(__dirname, '../assets/icons/', iconName)
-  try { return nativeImage.createFromPath(iconPath) }
-  catch { return nativeImage.createEmpty() }
+function loadTraySprite(which: keyof typeof TRAY_FILES): Electron.NativeImage {
+  const iconName = TRAY_FILES[which]
+  const iconPath = path.join(getIconsDir(), iconName)
+  try {
+    if (!fs.existsSync(iconPath)) {
+      console.warn(`[TubeMato] Tray icon missing: ${iconPath} — add PNGs under assets/icons/ or run npm run generate-icons`)
+      return nativeImage.createEmpty()
+    }
+    const img = nativeImage.createFromPath(iconPath)
+    if (img.isEmpty()) {
+      console.warn(`[TubeMato] Tray icon failed to load: ${iconPath}`)
+    }
+    return img
+  }
+  catch (e) {
+    console.warn('[TubeMato] Tray icon error', e)
+    return nativeImage.createEmpty()
+  }
+}
+
+function traySpriteForSession(s: TimerSession): keyof typeof TRAY_FILES {
+  const st = s.state
+  if (st === 'running') return 'working'
+  if (st === 'paused') return 'paused'
+  if ((st === 'break-short' || st === 'break-long') && s.isBreakPaused) return 'paused'
+  if (st.startsWith('break') || st === 'grace') return 'break'
+  return 'idle'
 }
 
 function buildTrayMenu() {
@@ -250,7 +314,7 @@ function buildTrayMenu() {
 }
 
 function createTray() {
-  tray = new Tray(getTrayIcon('idle'))
+  tray = new Tray(loadTraySprite(traySpriteForSession(timer.getSession())))
   tray.setToolTip('TubeMato')
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {
@@ -258,8 +322,8 @@ function createTray() {
   })
 }
 
-function updateTray(state: string) {
-  tray?.setImage(getTrayIcon(state))
+function updateTray(session: TimerSession) {
+  tray?.setImage(loadTraySprite(traySpriteForSession(session)))
   tray?.setContextMenu(buildTrayMenu())
 }
 
@@ -279,7 +343,7 @@ function startTimerBroadcast() {
   timer.onTick = session => {
     mainWindow?.webContents.send(IPC.TIMER_TICK, session)
     widgetWindow?.webContents.send(IPC.TIMER_TICK, session)
-    updateTray(session.state)
+    updateTray(session)
   }
 
   timer.onBell = type => {
