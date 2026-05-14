@@ -1,17 +1,20 @@
 {
-  "name": "tubemato",
+  "name": "TubeMato",
   "version": "0.2.0",
   "description": "Lightweight Pomodoro timer with YouTube integration and productivity tracking",
+  "author": {
+    "name": "Dantern"
+  },
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "electron:dev": "vite",
     "clean:package-artifacts": "node scripts/clean-package-output.js",
-    "electron:build": "npm run clean:package-artifacts && npm run build && electron-builder --win nsis --x64",
-    "electron:build:win-all": "npm run clean:package-artifacts && npm run build && electron-builder --win nsis --x64 --ia32 --arm64",
-    "electron:build:linux": "npm run clean:package-artifacts && npm run build && electron-builder --linux",
-    "electron:build:mac": "npm run clean:package-artifacts && npm run build && electron-builder --mac",
+    "electron:build": "npm run build && node scripts/build-win-icon.js && electron-builder --win nsis --x64",
+    "electron:build:win-all": "npm run build && node scripts/build-win-icon.js && electron-builder --win nsis --x64 --ia32 --arm64",
+    "electron:build:linux": "npm run build && electron-builder --linux",
+    "electron:build:mac": "npm run build && electron-builder --mac",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-icons.js",
     "generate-extension-icons": "node scripts/generate-extension-icons.js",
@@ -42,23 +45,26 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.tubemato.app",
+    "appId": "com.tubemato.desktop",
     "productName": "TubeMato",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
-    "icon": "assets/icons/icon256.png",
+    "icon": "assets/icons/app.ico",
     "asarUnpack": [
       "assets/icons/**"
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icons/icon256.ico"
+      "signAndEditExecutable": false,
+      "icon": "assets/icons/app.ico"
     },
+    "afterPack": "scripts/afterPack.js",
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "buildUniversalInstaller": false
     },
     "files": [
       "dist/**/*",
@@ -71,6 +77,13 @@
       "assets/icons/**/*"
     ],
     "extraResources": [
+      {
+        "from": "assets/icons",
+        "to": "tubemato-icons",
+        "filter": [
+          "**/*"
+        ]
+      },
       {
         "from": "extension",
         "to": "tubemato-youtube-bridge",

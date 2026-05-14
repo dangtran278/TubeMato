@@ -17,6 +17,9 @@ import { wallClockHourMinute, calendarDateKey, resolveTimeZone } from './calenda
 
 const isDev = !app.isPackaged
 
+/** Helps Windows taskbar / window chrome show the correct title and icon grouping. */
+app.setName('TubeMato')
+
 /** Folder containing manifest.json for the YouTube bridge (unpacked in dev, extraResources when packaged). */
 function getBridgeExtensionDir(): string {
   if (app.isPackaged) {
@@ -25,46 +28,82 @@ function getBridgeExtensionDir(): string {
   return path.join(__dirname, '../extension')
 }
 
-/** App window / dock: try largest first (your assets: icon{16,32,48,256}.{ico,png} plus legacy icon.*). */
+/** App window / taskbar: use the same ICO file as installer, uninstaller, and exe metadata. */
 const APP_ICON_CANDIDATES_WIN = [
-  'icon256.ico', 'icon256.png',
-  'icon48.ico', 'icon48.png',
-  'icon32.ico', 'icon32.png',
-  'icon16.ico', 'icon16.png',
-  'icon.ico', 'icon.png',
+  'app.ico',
 ]
 const APP_ICON_CANDIDATES_DEFAULT = [
-  'icon256.png', 'icon256.ico',
-  'icon48.png', 'icon48.ico',
-  'icon32.png', 'icon32.ico',
-  'icon16.png', 'icon16.ico',
-  'icon.png', 'icon.ico',
+  'app.ico',
 ]
 
-/** Icons: dev = repo `assets/icons`; packaged = `app.asar.unpacked/assets/icons` when listed in asarUnpack. */
-function getIconsDir(): string {
-  if (!app.isPackaged) {
-    return path.join(__dirname, '../assets/icons')
+/** Search order: packaged unpacked icons, then paths relative to main bundle, then cwd (dev). */
+function getCandidateIconDirs(): string[] {
+  const dirs: string[] = []
+  if (app.isPackaged) {
+    // Always present in packaged builds (extraResources) — avoids relying only on asarUnpack layout.
+    dirs.push(path.join(process.resourcesPath, 'tubemato-icons'))
+    dirs.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', 'icons'))
+    dirs.push(path.join(process.resourcesPath, 'assets', 'icons'))
   }
-  const unpacked = path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', 'icons')
-  const markers = ['icon256.png', 'icon256.ico', 'icon.png', 'tray-work.png']
-  if (markers.some(f => fs.existsSync(path.join(unpacked, f)))) {
-    return unpacked
+  dirs.push(path.join(__dirname, '../assets/icons'))
+  if (!app.isPackaged) {
+    dirs.push(path.join(process.cwd(), 'assets', 'icons'))
+  }
+  return [...new Set(dirs)]
+}
+
+/** First folder that actually contains tray/app icons (for tray PNG paths). */
+function getIconsDir(): string {
+  const markers = ['app.ico', 'icon256.png', 'tray-work.png']
+  for (const dir of getCandidateIconDirs()) {
+    if (!fs.existsSync(dir)) continue
+    if (markers.some(f => fs.existsSync(path.join(dir, f)))) return dir
   }
   return path.join(__dirname, '../assets/icons')
 }
 
-function getAppIconImage(): Electron.NativeImage | undefined {
-  const dir = getIconsDir()
+/** Absolute path to best runtime window/taskbar icon. */
+function getAppIconPath(): string | undefined {
   const order = process.platform === 'win32' ? APP_ICON_CANDIDATES_WIN : APP_ICON_CANDIDATES_DEFAULT
-  for (const name of order) {
-    const p = path.join(dir, name)
-    if (!fs.existsSync(p)) continue
+  for (const dir of getCandidateIconDirs()) {
+    if (!fs.existsSync(dir)) continue
+    for (const name of order) {
+      const p = path.join(dir, name)
+      if (fs.existsSync(p)) return path.normalize(p)
+    }
+  }
+  console.warn('[TubeMato] No app icon file found under candidate dirs:', getCandidateIconDirs().join(' | '))
+  return undefined
+}
+
+function getAppIconImage(): Electron.NativeImage | undefined {
+  const p = getAppIconPath()
+  if (!p) return undefined
+  try {
     const img = nativeImage.createFromPath(p)
     if (!img.isEmpty()) return img
+  } catch {
+    // fall through
   }
-  console.warn(`[TubeMato] No app icon found under ${dir} (expected icon256.png / icon256.ico or icon16–icon256 set)`)
+  console.warn(`[TubeMato] App icon failed to load: ${p}`)
   return undefined
+}
+
+/** Always pass an actual NativeImage to BrowserWindow/setIcon for the running app. */
+function getWindowIcon(): Electron.NativeImage | undefined {
+  return getAppIconImage()
+}
+
+/** Re-apply after window exists — fixes some Windows taskbar cases where ctor `icon` is ignored. */
+function applyWindowIcon(win: BrowserWindow | null) {
+  if (!win || process.platform !== 'win32') return
+  const img = getAppIconImage()
+  if (!img) return
+  try {
+    win.setIcon(img)
+  } catch {
+    // ignore
+  }
 }
 let mainWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
@@ -74,7 +113,9 @@ const timer = new TimerEngine()
 const autoLauncher = new AutoLaunch({ name: 'TubeMato', isHidden: true })
 
 if (process.platform === 'win32') {
-  app.setAppUserModelId('com.tubemato.app')
+  // New packaged AUMID intentionally breaks stale Windows taskbar icon cache
+  // created under the previous `com.tubemato.app` identity.
+  app.setAppUserModelId(isDev ? 'com.tubemato.desktop.dev' : 'com.tubemato.desktop')
 }
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
@@ -115,7 +156,7 @@ function createMainWindow() {
       nodeIntegration: false,
     },
     show: false,
-    icon: getAppIconImage(),
+    icon: getWindowIcon(),
   })
 
   if (isDev) {
@@ -124,7 +165,10 @@ function createMainWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.once('ready-to-show', () => {
+    applyWindowIcon(mainWindow)
+    mainWindow?.show()
+  })
 
   mainWindow.on('close', e => {
     e.preventDefault()
@@ -157,7 +201,7 @@ function createWidgetWindow() {
       nodeIntegration: false,
     },
     opacity: 0.75,
-    icon: getAppIconImage(),
+    icon: getWindowIcon(),
   })
 
   if (isDev) {
@@ -165,6 +209,8 @@ function createWidgetWindow() {
   } else {
     widgetWindow.loadFile(path.join(__dirname, '../dist/widget/widget.html'))
   }
+
+  widgetWindow.once('ready-to-show', () => applyWindowIcon(widgetWindow))
 
   widgetWindow.on('moved', () => {
     const [x, y] = widgetWindow!.getPosition()
