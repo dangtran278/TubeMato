@@ -10,10 +10,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "clean:package-artifacts": "node scripts/clean-package-output.js",
-    "electron:build": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64",
-    "electron:build:win-all": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64 --ia32 --arm64",
-    "electron:build:linux": "npm run clean:package-artifacts && npm run build && electron-builder --linux",
-    "electron:build:mac": "npm run clean:package-artifacts && npm run build && electron-builder --mac",
+    "electron:build": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64 --publish=never",
+    "electron:build:win-all": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64 --ia32 --arm64 --publish=never",
+    "electron:build:linux": "npm run clean:package-artifacts && npm run build && electron-builder --linux --x64 --arm64 --publish=never",
+    "electron:build:mac": "npm run clean:package-artifacts && npm run build && electron-builder --mac --x64 --arm64 --publish=never",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -38,6 +38,7 @@
     "electron-builder": "^26.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "resedit": "^1.7.2",
     "typescript": "^5.4.5",
     "uuid": "^9.0.1",
     "vite": "^5.2.8",
@@ -58,6 +59,16 @@
       "target": "nsis",
       "signAndEditExecutable": false,
       "icon": "assets/icons/app.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icons/icon.png",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icons/icon.png",
+      "category": "Utility"
     },
     "afterPack": "scripts/afterPack.js",
     "nsis": {
