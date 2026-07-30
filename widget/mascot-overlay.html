@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TubeMato Mascot</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      /* Wrapper handles horizontal positioning and flip.
+         right: 50px keeps glow unclipped when mascot is left of widget;
+         left: 50px + scaleX(-1) mirrors it when mascot is right of widget. */
+      #mascot-wrap {
+        position: absolute;
+        right: 50px;
+        top: 80px;
+        width: 300px;
+        height: 300px;
+      }
+      #mascot-wrap.side-right {
+        right: auto;
+        left: 50px;
+        transform: scaleX(-1);
+      }
+
+      #mascot {
+        width: 300px;
+        height: 300px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 28px rgba(224, 90, 58, 0.95));
+        transform: scale(0);
+        transform-origin: right center;
+        /* Rest nudge: up/down grow from an edge origin, which would otherwise leave the
+           settled mascot 42px above/below the widget center. This pulls it back so all
+           three modes settle in the exact same spot (next to the widget) as the default.
+           42px = (bandCenter 230 - edgeOrigin 80) * restScale 0.28. */
+        --settle-y: 0px;
+      }
+
+      /* Vertical growth direction (chosen by the main process from widget position).
+         transform-origin sets where it expands from; --settle-y restores a common rest.
+         The wrapper's scaleX(-1) mirrors these origins visually for the right-side case,
+         so "right" origin appears on the visual left (closest to the widget). */
+      #mascot.mode-center {
+        transform-origin: right center;
+        --settle-y: 0px;
+      } /* grow both ways */
+      #mascot.mode-down {
+        transform-origin: right top;
+        --settle-y: -42px;
+      } /* near top → grow down */
+      #mascot.mode-up {
+        transform-origin: right bottom;
+        --settle-y: 42px;
+      } /* near bottom → grow up */
+
+      #mascot.jumpscare {
+        animation: jumpscare 3s forwards;
+      }
+
+      @keyframes jumpscare {
+        0% {
+          transform: scale(0) rotate(-20deg);
+          animation-timing-function: cubic-bezier(0.36, 0.07, 0.19, 0.97);
+        }
+        /* Faster snap-in: full size by 13% (~0.4s) */
+        13% {
+          transform: scale(1.08) rotate(8deg);
+          animation-timing-function: ease;
+        }
+        18% {
+          transform: scale(0.95) rotate(-3deg);
+          animation-timing-function: ease;
+        }
+        22% {
+          transform: scale(1) rotate(0deg);
+          animation-timing-function: linear;
+        }
+        /* Stare: hold full size from 22% to 75% (~1.6s of unblinking menace) */
+        75% {
+          transform: scale(1) rotate(0deg);
+          animation-timing-function: ease-in-out;
+        }
+        /* Settled: ~widget height, nudged left so the glow clears the widget, and
+           --settle-y so up/down land at the same resting spot as center. */
+        100% {
+          transform: translate(-9px, var(--settle-y)) scale(0.28) rotate(0deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mascot-wrap">
+      <img id="mascot" src="../assets/icons/icon256.png" alt="" />
+    </div>
+    <script>
+      const wrap = document.getElementById("mascot-wrap");
+      const mascot = document.getElementById("mascot");
+
+      // mode: 'center' | 'up' | 'down' : set by the main process from the widget's
+      // position so the jumpscare grows away from the nearest screen edge.
+      // side: 'left' | 'right' : which side of the widget the mascot appears on.
+      function play(mode, side) {
+        wrap.classList.toggle("side-right", side === "right");
+        mascot.classList.remove("mode-center", "mode-up", "mode-down");
+        mascot.classList.add("mode-" + (mode === "up" || mode === "down" ? mode : "center"));
+        mascot.classList.remove("jumpscare");
+        void mascot.offsetWidth; // reflow so re-adding the class restarts the animation
+        mascot.classList.add("jumpscare");
+      }
+
+      // The main process drives every play (including the first, once this view has
+      // finished loading) and tells us which way to expand.
+      window.tubemato.mascot.onPlay(play);
+    </script>
+  </body>
+</html>

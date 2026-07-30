@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'path'
+import { electronAliases } from './electron-aliases'
 
 export default defineConfig({
   plugins: [
@@ -14,7 +15,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron', 'electron-store', 'electron-auto-launch'],
+              external: ['electron', 'electron-store'],
             },
           },
         },
@@ -37,21 +38,19 @@ export default defineConfig({
     renderer(),
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@electron/types': path.resolve(__dirname, 'electron/types.ts'),
-      '@electron/calendarDate': path.resolve(__dirname, 'electron/calendarDate.ts'),
-    },
+    alias: electronAliases(__dirname),
   },
   // Multi-page: main app + floating widget
   build: {
-    // Prevent Vite from deleting packaged artifacts under `dist/win-unpacked`
-    // when a previous package/build is still locked by Electron/Windows.
+    // Avoids Vite deleting packaged artifacts under `dist/win-unpacked` while Electron holds
+    // them locked. For a clean build, delete `dist/` and `dist-electron/` manually first.
     emptyOutDir: false,
     rollupOptions: {
       input: {
-        main:   path.resolve(__dirname, 'index.html'),
-        widget: path.resolve(__dirname, 'widget/widget.html'),
+        main:          path.resolve(__dirname, 'index.html'),
+        widget:        path.resolve(__dirname, 'widget/widget.html'),
+        mascotOverlay: path.resolve(__dirname, 'widget/mascot-overlay.html'),
+        notifications: path.resolve(__dirname, 'widget/notifications.html'),
       },
     },
   },

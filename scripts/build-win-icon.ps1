@@ -97,15 +97,31 @@ function New-BmpIconImage([string]$pngPath, [int]$targetSize) {
   }
 }
 
+$sourcePng = Join-Path $iconDir 'icon.png'
+
+# Generate icon256.png from the master for use by the renderer (App.tsx sidebar logo).
+$png256 = Join-Path $iconDir 'icon256.png'
+$src256 = [System.Drawing.Bitmap]::FromFile($sourcePng)
+try {
+  $bmp256 = New-Object System.Drawing.Bitmap 256, 256, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  $g256 = [System.Drawing.Graphics]::FromImage($bmp256)
+  $g256.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g256.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+  $g256.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+  $g256.DrawImage($src256, 0, 0, 256, 256)
+  $g256.Dispose()
+  $bmp256.Save($png256, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bmp256.Dispose()
+} finally {
+  $src256.Dispose()
+}
+Write-Host "[build-win-icon] wrote icon256.png"
+
 $images = @()
 foreach ($size in $sizes) {
-  $pngPath = Join-Path $iconDir "icon$size.png"
-  if (!(Test-Path $pngPath)) {
-    $pngPath = Join-Path $iconDir 'icon256.png'
-  }
   $images += [pscustomobject]@{
     Size = $size
-    Data = New-BmpIconImage $pngPath $size
+    Data = New-BmpIconImage $sourcePng $size
   }
 }
 

@@ -1,0 +1,539 @@
+/* Calendar board: a Monday-Sunday time grid with draggable, resizable dated focus events. */
+
+.schedule-view {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* the calendar body owns the scroll, not the view */
+}
+/* Tighter than the app-wide .view-header (sp-8): reclaims vertical space for the tall calendar grid. */
+.schedule-header { flex: 0 0 auto; margin-bottom: var(--sp-3); }
+
+/* Makes up the difference from schedule-header's tighter margin, so the empty-state mascot lines
+   up with Objectives' empty state instead of sitting higher on the page. */
+.schedule-empty { margin-top: var(--sp-5); padding: var(--sp-10); text-align: center; color: var(--text-muted); font-size: 14px; }
+
+.schedule-empty__mascot {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto var(--sp-4);
+  filter: drop-shadow(0 0 16px var(--accent-glow));
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+/* The empty-state tomato is large (120px), so scale its 💤 up to match (shared default is 1.1rem). */
+.schedule-empty .mascot-wrap__zzz {
+  font-size: 2rem;
+}
+
+/* Escalated empty-state line once the mascot has been poked. */
+.schedule-empty__poke {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Week navigation toolbar */
+
+.cal-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: 10px;
+}
+.cal-nav { display: flex; align-items: center; gap: 6px; }
+.cal-nav__today { font-size: 12px; padding: 4px 12px; }
+.cal-nav__arrow { position: relative; width: 28px; height: 28px; }
+.cal-nav__hint {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: normal;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: all var(--dur-fast) var(--ease);
+  border: 1px solid var(--border);
+  z-index: 100;
+}
+.cal-nav__arrow:hover .cal-nav__hint { opacity: 1; transform: translateX(-50%) translateY(0); }
+.cal-monthpick { position: relative; }
+.cal-weeklabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 4px 10px;
+}
+
+/* Month picker popover */
+
+.cal-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 248px;
+  padding: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+}
+.cal-picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.cal-picker__month {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border: none;
+  background: none;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.cal-picker__month:hover { background: var(--bg-hover); }
+
+/* Min-height matches the taller (day) grid, so the popover doesn't resize when toggling
+   between day and month views; content is vertically centered so the shorter month grid
+   sits balanced in the same box. */
+.cal-picker__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 220px;
+}
+
+/* Month picker: 3x4 grid of month abbreviations, shown when the header label is clicked.
+   Circle-themed to match the day grid, each cell centers a fixed-size circle (hover =
+   surface fill, selected = accent tint) rather than a full-cell rounded rect. */
+.cal-picker__months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+  --cal-month-dot: 44px;
+}
+.cal-picker__month-cell {
+  height: var(--cal-month-dot);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.cal-picker__month-cell::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: var(--cal-month-dot);
+  height: var(--cal-month-dot);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--bg-hover);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.cal-picker__month-cell:hover::before { opacity: 1; }
+.cal-picker__month-cell--today { font-weight: 700; color: var(--accent); }
+.cal-picker__month-cell--sel {
+  font-weight: 600;
+}
+.cal-picker__month-cell--sel::before {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.cal-picker__month-cell--sel.cal-picker__month-cell--today { color: var(--text-primary); }
+.cal-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  --cal-dot: 26px;
+}
+.cal-picker__wd {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+}
+.cal-picker__day {
+  aspect-ratio: 1;
+  position: relative;
+  z-index: 1; /* lift the day (and its dot/hover pseudos) above the selected-week bar */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.cal-picker__day--out { color: var(--text-muted); opacity: 0.55; }
+
+/* Hover: a circle the same size as the today dot, not a full-cell square. */
+.cal-picker__day::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: var(--cal-dot);
+  height: var(--cal-dot);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--bg-hover);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.cal-picker__day:hover::before { opacity: 1; }
+/* Set unconditionally (not just on :hover) so leaving the cell only fades opacity; the color
+   itself never has to snap from bg-hover to accent mid-transition. */
+.cal-picker__day--selweek::before { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+.cal-picker__day--today:hover::before { opacity: 0; }
+
+/* Selected-week bar: one element spanning the full row (grid-row set inline from the picked
+   week's index), so there's no per-cell seam. Same height/radius as the today dot, so when
+   today lands at either end of the row, the bar's cap and the dot blend rather than clash. */
+.cal-picker__selweek-bar {
+  grid-column: 1 / -1;
+  align-self: center;
+  height: var(--cal-dot);
+  /* Inset each end by (half a cell minus dot radius) so the rounded cap's flat edge lands on
+     the first/last cell center, coinciding with the today dot instead of overhanging it.
+     Cell width = (row - 6 * 2px gaps) / 7, so half-cell = (100% - 12px) / 14. */
+  margin-inline: calc((100% - 12px) / 14 - var(--cal-dot) / 2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  pointer-events: none;
+}
+
+.cal-picker__day--today {
+  font-weight: 700;
+  color: #fff;
+}
+.cal-picker__day--today::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: var(--cal-dot);
+  height: var(--cal-dot);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--accent);
+  transition: filter var(--dur-fast) var(--ease);
+}
+.cal-picker__day--today:hover::after { filter: brightness(1.15); }
+
+/* Objective-occurrence chips in the day header */
+
+.cal-dayhead__occs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 0 3px;
+}
+.cal-dayhead__occ {
+  font-size: 9px;
+  line-height: 1.3;
+  padding: 1px 4px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-dayhead__occ--more { background: none; color: var(--text-muted); padding-left: 4px; }
+
+/* Calendar frame */
+
+.cal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+/* Header lives inside the scroll and sticks to the top, so its columns stay aligned with the grid below. */
+.cal-headrow {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.cal-gutter-head {
+  flex: 0 0 52px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.cal-dayhead {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-left: 1px solid var(--border);
+}
+.cal-dayhead__wd {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.cal-dayhead__num { font-size: 18px; font-weight: 500; color: var(--text-primary); line-height: 1.4; }
+.cal-dayhead--today .cal-dayhead__wd { color: var(--accent); }
+.cal-dayhead--today .cal-dayhead__num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: #fff;
+}
+
+.cal-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.cal-body { position: relative; display: flex; }
+
+.cal-gutter { position: relative; flex: 0 0 52px; }
+.cal-hour-label {
+  position: absolute;
+  right: 8px;
+  transform: translateY(-6px);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cal-cols { position: relative; flex: 1; display: flex; }
+.cal-col {
+  position: relative;
+  flex: 1;
+  border-left: 1px solid var(--border);
+  touch-action: none;
+}
+
+/* Time blocks */
+
+/* Non-clipping wrapper carrying the block's grid geometry, so the hover toolbar can float
+   outside the block (which itself clips its content to rounded corners). */
+.cal-block-wrap { position: absolute; }
+/* 1px shy of the bottom so back-to-back blocks (A's end == B's start) show a hairline seam, not fuse. */
+.cal-block-wrap > .cal-block { inset: 0 0 1px 0; }
+
+.cal-block {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 1px 6px;
+  border-radius: 6px;
+  /* One source of truth for the block color: per-objective color can set --cal-block-bg on the
+     wrapper, and the hover tab (below) reads the same variable so the two always match. */
+  border: 1px solid var(--cal-block-bg, var(--accent));
+  background: var(--cal-block-bg, var(--accent));
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: border-radius var(--dur-fast) var(--ease);
+}
+.cal-block:hover { filter: brightness(1.08); }
+/* While dragging, the block ignores the pointer so it can't re-trigger :hover as it lags behind
+   the cursor; the pointer passes through to the column beneath. */
+.cal-block--dragging { cursor: grabbing; opacity: 0.92; box-shadow: var(--shadow-md); z-index: 5; pointer-events: none; }
+.cal-block--provisional { opacity: 0.55; border-style: dashed; pointer-events: none; }
+
+.cal-block__title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Calendar hover tooltip content: objective title over its group (a stacked .tooltip-bubble). Wraps
+   (incl. breaking long unbroken strings) so the full title/group show, never re-truncated. */
+.cal-tip__title { font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+.cal-tip__group { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; color: var(--text-muted); font-weight: 500; overflow-wrap: anywhere; }
+
+.cal-block__time { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.82; }
+.cal-block__time--hidden { display: none; }
+
+/* Short block: objective + start on one line; objective keeps priority, time hides when it'd crowd it. */
+.cal-block__compact { display: flex; align-items: baseline; min-width: 0; width: 100%; overflow: hidden; }
+.cal-block__compact .cal-block__title { flex: 0 1 auto; min-width: 0; }
+.cal-block__compact .cal-block__time { flex: 0 0 auto; }
+
+/* Above .cal-now (6), so the line passes behind the label instead of striking through it. */
+.cal-block__title,
+.cal-block__time,
+.cal-block__compact { position: relative; z-index: 7; }
+
+/* Ambient timer indicator: a left stripe marks the block whose objective is the active timer,
+   so a running/paused session reads at a glance without any control sitting on the content. */
+.cal-block--running::before,
+.cal-block--paused::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #fff;
+  opacity: 0.9;
+}
+.cal-block--running::before { animation: cal-block-run-pulse 1.8s ease-in-out infinite; }
+@keyframes cal-block-run-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.35; }
+}
+
+/* Hover controls: a tab in the block's own accent, attached flush to its top edge (only the top
+   corners rounded) so it reads as part of the block growing outward rather than a floating menu.
+   Kept off the title/time by living outside the block's box. */
+.cal-block__toolbar {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: -1px; /* overlap the block's top border so the join is seamless */
+  z-index: 20;
+  display: flex;
+  gap: 0;
+  padding: 1px 2px;
+  background: var(--cal-block-bg, var(--accent));
+  border: 1px solid var(--cal-block-bg, var(--accent));
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  /* Cast only upward (away from the block below it), so it lifts the tab above a neighbor it may
+     overlap without shadowing its own block, where the two are meant to join seamlessly. The
+     negative spread keeps the blur off the bottom edge entirely. */
+  box-shadow: 0 -5px 8px -3px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+/* Treat the block + tab as one hover unit whether the pointer is over the block or the tab. The
+   tab sits outside the wrapper's box, so :hover on the wrapper drops when you move onto the tab;
+   :has(:hover) stays true because the tab is still a DOM descendant of the wrapper. */
+.cal-block-wrap:has(:hover) .cal-block__toolbar { opacity: 1; pointer-events: auto; }
+.cal-block-wrap:has(:hover) { z-index: 15; }
+.cal-block-wrap:has(:hover) .cal-block,
+.cal-block-wrap:has(:hover) .cal-block__toolbar { filter: brightness(1.08); }
+/* Square the corner the tab meets so the two read as one continuous shape up the right edge,
+   instead of the tab's square corner clashing with the block's curve. */
+.cal-block-wrap:has(:hover) .cal-block { border-top-right-radius: 0; }
+/* Suppress toolbars during any drag/resize so one never pops up under the moving cursor. */
+body.sched-drag--grab .cal-block__toolbar,
+body.sched-drag--ns .cal-block__toolbar { opacity: 0 !important; pointer-events: none !important; }
+/* The block stays hovered while held/dragged/resized, but the tab is hidden then, so the corner it
+   normally squares for the tab has nothing to join: keep it fully rounded. */
+body.sched-drag--grab .cal-block,
+body.sched-drag--ns .cal-block {
+  border-top-right-radius: 6px !important;
+  border-bottom-right-radius: 6px !important;
+}
+
+.cal-block__toolbtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 13px;
+  padding: 0;
+  font-size: 8px;
+  line-height: 1;
+  color: #fff;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.cal-block__toolbtn:hover { background: rgba(255, 255, 255, 0.22); }
+
+/* Pause drawn as two bars rather than the ⏸ glyph, which Segoe renders undersized and
+   baseline-shifted (off-center) next to the geometric ▶/✕ shapes. Centered by the flex parent. */
+.cal-block__pauseicon {
+  display: block;
+  width: 5px;
+  height: 7px;
+  background: linear-gradient(to right, currentColor 0 2px, transparent 2px 3px, currentColor 3px 5px);
+}
+
+/* Document-wide cursor pinned during a drag (set in JS) so it never flickers to the arrow. */
+body.sched-drag--grab, body.sched-drag--grab * { cursor: grabbing !important; }
+body.sched-drag--ns,   body.sched-drag--ns *   { cursor: ns-resize !important; }
+
+/* Now indicator: a cool blue current-time line, distinct from the orange blocks. */
+.cal-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--break-color); z-index: 6; pointer-events: none; }
+.cal-now__dot { position: absolute; left: -3px; top: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--break-color); }
+
+/* Slot form modal */
+
+.modal--slot { width: min(620px, 94vw); padding: var(--sp-5) var(--sp-6); }
+/* Trims the modal's own chrome, since the full recurrence editor made this form tall. */
+.modal--slot .modal__header { margin-bottom: var(--sp-3); }
+.modal--slot .modal__footer { margin-top: var(--sp-3); }
+/* No gap here: .form-label already carries its own margin-bottom. Between-field spacing comes
+   only from .modal__body's gap, which must stay bigger than that margin. */
+.slot-form__field { display: flex; flex-direction: column; }
+.slot-form__objrow { display: flex; gap: 8px; align-items: stretch; }
+.slot-form__objrow .input { flex: 1; }
+/* CenterSelect's outer wrapper (not its inner .input button) is what needs to grow here. */
+/* min-width: 0 lets the flex item shrink below the (long) title so the value truncates inside
+   instead of overflowing the modal and forcing a horizontal scrollbar. */
+.slot-form__objrow .cselect { flex: 1; min-width: 0; max-width: none; }
+.slot-form__objrow .cselect__button { width: 100%; min-width: 0; max-width: none; }
+.slot-form__addobj {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 18px;
+  line-height: 1;
+  border: 1px solid var(--border);
+}
+.slot-form__addobj:hover { border-color: var(--accent); color: var(--accent); }
+.slot-form__row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; }
+.slot-form__alerts { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+/* Alert dropdowns fill the column, matching the full-width native selects they replaced. */
+.slot-form__alerts .cselect { max-width: none; }
+.slot-form__alerts .cselect__button { width: 100%; max-width: none; min-width: 0; }
+.slot-form__footer { display: flex; align-items: center; justify-content: space-between; }
+.slot-form__footer-right { display: flex; gap: 8px; margin-left: auto; }
+.slot-form__delete { color: var(--danger); }

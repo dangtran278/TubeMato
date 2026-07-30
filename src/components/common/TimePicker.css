@@ -1,0 +1,58 @@
+.timepicker { position: relative; display: block; }
+
+.timepicker__field {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+}
+.timepicker__icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.timepicker__icon-btn:hover { color: var(--text-secondary); }
+
+.timepicker__pop {
+  z-index: 10001;   /* above the modal backdrop (5000) */
+  display: flex;
+  gap: 2px;
+  padding: var(--sp-1);
+  background: var(--bg-elevated, var(--bg-overlay));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.timepicker__col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 52px;
+  max-height: 200px;
+  overflow-y: auto;
+  /* Scrolls, but hide the bars (two side-by-side looked noisy). */
+  scrollbar-width: none;
+}
+.timepicker__col::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.timepicker__col--ampm { width: 48px; }
+
+.timepicker__item {
+  flex-shrink: 0;
+  padding: var(--sp-2) 0;
+  border: none;
+  background: none;
+  border-radius: var(--r-sm, 6px);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+.timepicker__item:hover { background: var(--bg-overlay); }
+.timepicker__item--selected,
+.timepicker__item--selected:hover { background: var(--accent); color: #fff; font-weight: 600; }

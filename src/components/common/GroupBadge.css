@@ -1,0 +1,25 @@
+/* Group badge: neutral chip carrying the group's own color only in the small dot, so it reads as
+   classification and never as a status/warning badge. `--group-color` is set inline by the caller. */
+.badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;   /* allow the badge (and its name) to truncate when width-constrained */
+  background: rgba(127, 127, 127, 0.08);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.badge-group__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--group-color, currentColor);
+  flex-shrink: 0;
+  display: inline-block;
+}
+.badge-group__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

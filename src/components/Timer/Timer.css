@@ -7,13 +7,13 @@
   align-items: flex-start;
 }
 
-/* Centered variant — used when there's no side panel */
+/* Centered variant: used when there's no side panel */
 .timer-view--centered {
   align-items: center;
   justify-content: center;
 }
 
-/* Phase pill above ring — keep tight to circle */
+/* Phase pill above ring: keep tight to circle */
 .timer-view--centered > .timer-label.badge {
   margin-bottom: var(--sp-1);
 }
@@ -31,6 +31,25 @@
 .circular-progress {
   position: absolute;
   inset: 0;
+}
+
+/* Procrastination loom: a dim tomato rises from behind the lower arc and grows
+   more visible the longer you stall (opacity set inline from procrastinationSeconds).
+   z-index 0 keeps it under the countdown (.timer-center is z-index 1); the
+   brightness/blur make it a looming shadow rather than a sharp foreground image. */
+.timer-loom {
+  position: absolute;
+  z-index: 0;
+  bottom: -10px;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  object-fit: contain;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  filter: brightness(0.55) blur(1px) drop-shadow(0 0 24px rgba(224, 90, 58, 0.5));
+  pointer-events: none;
+  transition: opacity 1s linear;
 }
 
 .timer-center {
@@ -65,6 +84,14 @@
   gap: var(--sp-2);
   align-items: center;
 }
+/* Compact "done/total" shown in place of the dots when the interval is too high to render cleanly. */
+.session-dots--count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 
 .session-dot {
   width: 8px;
@@ -91,22 +118,15 @@
 }
 
 .timer-objective-selector {
-  width: 280px;
-}
-
-.objective-selector {
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239898b0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 /* ─── YouTube bridge hint ────────────────────────────────────────────────────── */
 .bridge-hint {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--sp-2);
   font-size: 12px;
@@ -114,6 +134,21 @@
   max-width: 320px;
   text-align: center;
   line-height: 1.5;
+}
+
+.bridge-hint__status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* Tab selector aligned to the same min-width as the objective selector (220px). */
+.bridge-hint__tab-select .cselect__button {
+  min-width: 220px;
+  max-width: 260px;
+  height: auto;
+  padding: 4px 26px;
+  font-size: 11px;
 }
 
 .bridge-hint__dot {

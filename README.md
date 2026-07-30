@@ -1,96 +1,93 @@
-# TubeMato
+<p align="center">
+  <img src="assets/icons/icon256.png" width="96" alt="TubeMato" />
+</p>
 
-TubeMato is an Electron desktop Pomodoro app with objective tracking, analytics, and optional YouTube bridge controls.
+<h1 align="center">TubeMato</h1>
 
-## Current Feature Set
+<p align="center">A Pomodoro timer with opinions. Mostly about you.</p>
 
-- **Timer states**: Focus, pause, short/long break, grace, overdue/procrastinating.
-- **Objectives**: One-time or repeating objectives with check-ins and period tracking.
-- **Per-objective timer overrides**: Optional work/short/long durations that can override global settings when selected.
-- **Procrastination flow**: Grace countdown after break, overdue tracking, and optional desktop nudge.
-- **Daily summary**: End-of-day recap with objective progress, streak, focus/procrastination totals.
-- **Analytics**: Focus-day heatmap, shared-scale focus/procrastination charts, streak stats.
-- **Mini widget**: Always-on-top floating timer window.
-- **Tray controls**: Keep app running in tray and control timer without reopening main window.
-- **Windows auto-launch**: Configurable in Settings.
-- **Log rotation**: Monthly / quarterly / semiannual / yearly logs.
+---
 
-## Tech Stack
+TubeMato is a desktop Pomodoro timer that tracks procrastination alongside focus, remembers what objectives you skipped instead of letting them disappear, and closes out each day with a summary whether you want one or not. An optional browser extension syncs YouTube audio to the timer.
 
-- Electron (main + preload)
-- React + Vite (renderer)
-- TypeScript
-- Zustand (renderer state)
-- `electron-store` + JSON log files (local persistence)
+## Features
+
+- **Timer:** Pomodoro loop with procrastination tracking. When you don't resume after a break, the app notices and starts counting.
+- **Objectives:** One-time deadlines and recurring targets that carry missed completions forward as debt. Each objective can override the global timer and audio settings.
+- **Calendar:** Set in advance when to work on an objective. When the time comes, a notification starts it with one click.
+- **Five-Year Plan:** A board for longer-term goals. Lay out where you want to be, year by year.
+- **Reminders:** Sends reminders as deadlines get close and wraps up each day with a summary.
+- **Analytics:** Heatmap and charts showing where your focus went, day by day, and which hours you focus best in.
+- **YouTube bridge:** Optional browser extension that controls YouTube audio with focus and break blocks.
+- **Widget & tray:** Always-on-top mini timer with a tray icon that keeps the app running when the main window closes.
+- **Settings:** Full control over how the timer runs, how the app looks, and when it speaks up.
 
 ## Getting Started
 
 ```bash
 npm install
 npm run bootstrap:icons
-npm run electron:dev
+npm run dev
 ```
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `npm run electron:dev` | Start Vite dev server for the app UI |
-| `npm run build` | Type-check and build renderer + electron bundles |
-| `npm run electron:build` | Build and package with electron-builder |
-| `npm run generate-icons` | Generate app/tray icons |
-| `npm run generate-extension-icons` | Generate YouTube bridge extension icons |
-| `npm run bootstrap:icons` | Run both icon generators |
-| `npm run preview` | Preview built renderer |
+| Command                          | Description                             |
+| -------------------------------- | --------------------------------------- |
+| `npm run dev`                    | Start Vite dev server + Electron        |
+| `npm run build`                  | Type-check and build                    |
+| `npm test`                       | Run test suite (Vitest)                 |
+| `npm run test:watch`             | Run tests in watch mode                 |
+| `npm run seed`                   | Seed dev data for local testing         |
+| `npm run electron:build`         | Package for Windows x64 (NSIS)          |
+| `npm run electron:build:win-all` | Package for Windows x64 + ia32 + arm64  |
+| `npm run electron:build:linux`   | Package for Linux                       |
+| `npm run electron:build:mac`     | Package for macOS                       |
+| `npm run bootstrap:icons`        | Generate app, tray, and extension icons |
 
 ## Project Layout
 
-```text
+```
 TubeMato/
-├── electron/                # main process: timer engine, IPC, store, scheduler
-├── src/                     # renderer (React)
-│   ├── components/          # Timer, Objectives, Analytics, Settings
-│   ├── hooks/               # renderer hooks (timer events/actions, etc.)
-│   ├── store/               # Zustand stores
-│   └── types/               # renderer window bridge typing
-├── widget/                  # mini-widget HTML entry
-├── extension/               # browser bridge extension files
-├── assets/icons/            # app + tray icons
-└── scripts/                 # icon generation utilities
+├── electron/       # Main process: timer, scheduler, store, IPC, copy
+├── src/            # Renderer (React + Zustand)
+├── widget/         # Always-on-top mini widget (standalone HTML)
+├── extension/      # YouTube bridge browser extension
+├── tests/          # Vitest unit tests
+└── scripts/        # Icon generation and build utilities
 ```
 
-## Data Storage (Local Only)
+## Data Storage
 
-TubeMato stores all data locally via Electron `userData`.
+All data is stored locally. Nothing leaves your machine.
 
-- Store file (settings/objectives/summary metadata): `tubemato.json`
-- Log files: `logs/log-*.json`
+| File              | Contents                                          |
+| ----------------- | ------------------------------------------------- |
+| `tubemato.json`   | Settings, objectives, summary metadata            |
+| `logs/log-*.json` | Focus sessions, procrastination events, check-ins |
 
-Common Windows locations:
+Default locations on Windows:
 
-- `%APPDATA%\TubeMato\`
-- `%APPDATA%\Electron\` (often in dev mode)
+- `%APPDATA%\TubeMato\` (installed)
+- `%APPDATA%\Electron\` (dev mode)
 
-No cloud sync is used by default.
+## Reset
 
-## Reset to a Clean State
+1. Quit TubeMato fully (tray included).
+2. Delete `tubemato.json` and/or the `logs/` folder.
+3. Relaunch.
 
-1. Quit TubeMato fully (including tray).
-2. Delete `tubemato.json`.
-3. Delete the `logs` folder (or its contents).
-4. Relaunch TubeMato.
+## YouTube Bridge
 
-You can also do partial resets:
+The bridge extension is optional. Without it the timer works normally; YouTube music just won't fade automatically. To install, open the extension guide from within the app.
 
-- Keep settings/objectives, clear history: delete only `logs`.
-- Keep history, reset settings/objectives: delete only `tubemato.json`.
-
-## YouTube Bridge Notes
-
-- Bridge controls depend on the browser extension and local command server.
-- Non-embeddable/private/age-restricted content may not be controllable.
-- Timer continues even if YouTube control is unavailable.
+Limitations: non-embeddable, private, or age-restricted content may not be controllable. The timer continues regardless.
 
 ## Packaging
 
-`npm run electron:build` packages for Windows NSIS using settings in `package.json` (`build` section).
+```bash
+npm run electron:build          # Windows x64 NSIS
+npm run electron:build:win-all  # Windows x64 + ia32 + arm64
+npm run electron:build:linux    # Linux
+npm run electron:build:mac      # macOS
+```

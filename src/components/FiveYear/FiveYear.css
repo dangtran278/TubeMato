@@ -1,0 +1,426 @@
+/* ── Five-Year Plan board ─────────────────────────────────────────────────── */
+
+.fiveyear-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+.fiveyear-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-shrink: 0;
+}
+.fiveyear-progress {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Board: one column per year, scrolling horizontally in its own container so the page never does. */
+.fyboard {
+  display: flex;
+  gap: var(--sp-4);
+  overflow-x: auto;
+  padding-bottom: var(--sp-3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) transparent;
+}
+.fycol {
+  flex: 0 0 clamp(240px, 22vw, 300px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.fycol__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.fycol__year {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.fycol__tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-full);
+}
+.fycol__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.fycol__add {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: all var(--dur-fast) var(--ease);
+}
+.fycol__add:hover {
+  border-color: var(--border-hover);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+/* ── goal card ─────────────────────────────────────────────────────────────── */
+
+.fycard {
+  --cat-color: var(--border-hover);
+  /* The tools only ever show while hovered, so each host's scrim is its HOVERED background: a loose
+     card keeps --bg-surface, a row inside a category card switches to --bg-hover. */
+  --fy-scrim: var(--bg-surface);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cat-color);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  transition: border-color var(--dur-base) var(--ease);
+}
+.fycard:hover { border-color: var(--border-hover); border-left-color: var(--cat-color); }
+.fycard--done { opacity: 0.6; }
+
+.fycard__top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  /* Matches the height the hover tools used to set while they were in flow, so taking them out
+     reclaims the horizontal space without shortening the card. */
+  min-height: 26px;
+}
+.fycard__check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--border-hover);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--dur-fast) var(--ease);
+}
+.fycard__check:hover { border-color: var(--accent); }
+.fycard__check--on { background: var(--success); border-color: var(--success); }
+
+.fycard__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.fycard__badge { align-self: flex-start; max-width: 100%; }
+.fycard__title {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.fycard--done .fycard__title { text-decoration: line-through; color: var(--text-secondary); }
+
+/* Out of flow, so the title gets the full card width in the state you actually look at. On hover
+   they fade in over the title's right end rather than reflowing it; the gradient runs the width of
+   the padding, so a title long enough to reach them fades out instead of being abruptly clipped.
+   `--fy-scrim` is the background they sit on, which differs per host (see .fycard / .fyrow). */
+.fycard__tools {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  padding-left: 24px;
+  background: linear-gradient(to right, transparent, var(--fy-scrim) 24px);
+  opacity: 0;
+  /* Required now that they overlap the title: at rest they must not swallow its clicks. */
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.fycard:hover .fycard__tools { opacity: 1; pointer-events: auto; }
+.fycard__tool {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: transparent;
+}
+/* Nudge the drawn trash glyph up a hair so it reads centered in the button. */
+.fycard__tool svg { transform: translateY(-1px); }
+/* Mirror the pencil so it faces the same way as the objective card's edit icon, a touch larger. */
+.fycard__tool--edit { transform: scaleX(-1); font-size: 16px; }
+/* Color only on hover, no background, same as the group dropdown's tools. Doubled class so it
+   outranks .btn-icon:hover regardless of stylesheet order. */
+.fycard__tool.fycard__tool:hover { background: transparent; }
+/* Destructive tools go red on hover wherever they appear (see .cselect__optdelete for the twin). */
+.fycard__tool.fycard__tool--del:hover { color: var(--danger); }
+
+.fycard__expand {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 var(--sp-1);
+  transition: color var(--dur-fast) var(--ease);
+}
+.fycard__expand:hover { color: var(--text-secondary); }
+
+.fycard__detail {
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.fycard__actions {
+  margin: 0;
+  padding-left: 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fycard__actions li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.fycard__note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Loose (uncategorized) goal cards sit at the year's top level and are drag sources. */
+.fycard--loose { cursor: grab; }
+.fycard--loose:active { cursor: grabbing; }
+
+/* ── category card (goals grouped under a category) ─────────────────────────── */
+
+.fycatcard {
+  --cat-color: var(--border-hover);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cat-color);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: border-color var(--dur-base) var(--ease), opacity var(--dur-base) var(--ease);
+}
+.fycatcard:hover { border-color: var(--border-hover); }
+.fycatcard--done { opacity: 0.55; }
+
+.fycatcard__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: grab;
+  border-bottom: 1px solid var(--border);
+}
+.fycatcard__head:active { cursor: grabbing; }
+.fycatcard--done .fycatcard__head { border-bottom-color: transparent; }
+.fycatcard__grip { color: var(--text-muted); font-size: 12px; letter-spacing: -2px; flex-shrink: 0; }
+.fycatcard__dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.fycatcard__name {
+  flex: 1; min-width: 0;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fycatcard__count { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.fycatcard__collapse,
+.fycatcard__add {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 13px; line-height: 1;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.fycatcard__collapse:hover,
+.fycatcard__add:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+/* Drawn from two centered bars (not the "+" text glyph) so it's pixel-centered regardless of
+   font metrics: the glyph's ink box isn't symmetric around its line-height center. */
+.fycatcard__add {
+  position: relative;
+}
+.fycatcard__add span { display: none; }
+.fycatcard__add::before,
+.fycatcard__add::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: currentColor;
+  border-radius: 1px;
+}
+.fycatcard__add::before { width: 10px; height: 2px; transform: translate(-50%, -50%); }
+.fycatcard__add::after { width: 2px; height: 10px; transform: translate(-50%, -50%); }
+
+.fycatcard__body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-1);
+}
+
+.fyrow {
+  --fy-scrim: var(--bg-hover);
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  cursor: grab;
+  transition: background var(--dur-fast) var(--ease);
+}
+.fyrow:hover { background: var(--bg-hover); }
+.fyrow:active { cursor: grabbing; }
+.fyrow:hover .fycard__tools { opacity: 1; pointer-events: auto; }
+.fyrow--done .fycard__title { text-decoration: line-through; color: var(--text-secondary); }
+.fyrow--done { opacity: 0.6; }
+
+/* ── drag feedback ─────────────────────────────────────────────────────────── */
+
+/* Insertion line at an item's edge (reorder / place-between). A box-shadow (not a ::before) so it
+   isn't clipped by the category card's own overflow:hidden. */
+.fy-line-top { box-shadow: 0 -2px 0 0 var(--accent); }
+.fy-line-bottom { box-shadow: 0 2px 0 0 var(--accent); }
+
+/* INTO highlight: a goal will join this category card. */
+.fy-into {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* A goal will move to this year (its category preserved) via the column's empty space. */
+.fy-col-drop {
+  outline: 2px dashed var(--border-hover);
+  outline-offset: -6px;
+  border-radius: var(--r-md);
+}
+
+/* Fixed cluster at bottom-right; rename (category drags only) stacks above trash. */
+.fy-dropzones {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+}
+.fy-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--r-lg);
+  border: 1.5px dashed var(--border-hover);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-lg);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.fy-dropzone__label { font-size: 11px; font-weight: 600; }
+.fy-dropzone--over {
+  border-style: solid;
+  background: var(--bg-hover);
+  transform: scale(1.06);
+}
+/* Per-zone accent when hovered: red for delete, neutral text for rename. */
+.fy-trash.fy-dropzone--over { color: var(--danger); border-color: var(--danger); }
+.fy-rename.fy-dropzone--over { color: var(--text-primary); border-color: var(--text-primary); }
+
+/* ── goal form ─────────────────────────────────────────────────────────────── */
+
+.goal-form__row {
+  display: flex;
+  gap: var(--sp-3);
+}
+.goal-form__field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; }
+/* Sized to the label ("Target year", ~65px) rather than the value: a 4-digit year needs only ~30px
+   between the paddings, so anything wider just reads as a half-empty field. */
+.goal-form__field--year { flex: 0 0 92px; }
+/* CenterSelect defaults to a 260px min-width (roomy for the objective pickers); here the year is
+   4 digits, so override it to fill this compact field instead of overflowing the modal. */
+.goal-form__year-select { width: 100%; }
+/* Left-aligned, unlike the centered Settings-style pickers: this sits in a form row under Title and
+   beside Category, so it should share their text edge instead of floating mid-field. */
+.goal-form__year-select .cselect__button {
+  min-width: 0;
+  width: 100%;
+  justify-content: flex-start;
+  padding-left: var(--sp-4);
+}
+.goal-form__year-select .cselect__option { text-align: left; }
+.goal-form__category-row { display: flex; align-items: center; gap: var(--sp-2); }
+.goal-form__category-row .group-combo { flex: 1; min-width: 0; }
+.goal-form__actions { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* The grip and remove button are absolute, inside the input's own padding, so the field stays the
+   same width as Title and Note instead of being inset around them. */
+.goal-form__action { position: relative; display: flex; }
+/* Only the right padding is widened. The grip fits inside the field's own left padding, so the
+   Actions text still starts at 16px and lines up with Title and Note. */
+.goal-form__action .input { padding-right: 36px; }
+/* The grip is the row's only drag source, so the input keeps normal text selection. */
+.goal-form__action-grip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: grab;
+  opacity: 0.55;
+  user-select: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.goal-form__action:hover .goal-form__action-grip { opacity: 1; }
+.goal-form__action-grip:active { cursor: grabbing; }
+/* The row being dragged stays in place but recedes; the accent line shows where it will land. */
+.goal-form__action--dragging { opacity: 0.4; }
+.goal-form__action-rm {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  background: transparent;
+}
+.goal-form__note { height: auto; min-height: 56px; padding: var(--sp-3) var(--sp-4); resize: vertical; line-height: 1.45; font-family: inherit; }
+
+.goal-form__footer { align-items: center; }
+.goal-form__delete { margin-right: auto; }
+.goal-form__error { color: var(--danger); font-size: 12px; margin-right: var(--sp-2); }
+.goal-form__footer-right { display: flex; gap: var(--sp-3); }

@@ -1,6 +1,6 @@
 /**
  * Optional: creates ONLY missing Chrome/Brave extension icons (16 / 48 / 128 px).
- * Writes under extension/ only — does NOT touch assets/icons/ or tray-*.png.
+ * Writes under extension/ only. Does NOT touch assets/icons/ or tray-*.png.
  * Never overwrites existing files so your artwork stays on disk.
  *
  * Run: npm run generate-extension-icons
@@ -46,10 +46,10 @@ for (const size of [16, 48, 128]) {
   const name = `icon${size}.png`
   const dest = path.join(outDir, name)
   if (fs.existsSync(dest)) {
-    console.log(`  ·  extension/${name}  (already exists — skipped)`)
+    console.log(`  ·  extension/${name}  (already exists, skipped)`)
     continue
   }
   fs.writeFileSync(dest, makePNG(size, circlePixel))
   console.log(`  ✓  extension/${name}  (created placeholder)`)
 }
-console.log('\nDone. Tray icons live in assets/icons/ — unchanged by this script.\n')
+console.log('\nDone. Tray icons live in assets/icons/, unchanged by this script.\n')

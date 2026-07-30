@@ -78,7 +78,7 @@ fs.mkdirSync(outDir, { recursive: true })
 function writeIfMissing(name, buf) {
   const dest = path.join(outDir, name)
   if (fs.existsSync(dest)) {
-    console.log(`  ·  ${name}  (already exists — skipped)`)
+    console.log(`  ·  ${name}  (already exists, skipped)`)
     return
   }
   fs.writeFileSync(dest, buf)
@@ -102,7 +102,7 @@ if (!fs.existsSync(iconPath)) {
   const pixelFn = circleOnBg('#e05a3a', '#17171e')
   writeIfMissing('icon.png', makePNG(size, size, (x, y) => pixelFn(x, y, size, size)))
 } else {
-  console.log(`  ·  icon.png  (already exists — skipped)`)
+  console.log(`  ·  icon.png  (already exists, skipped)`)
 }
 
 console.log('\nDone. Replace placeholders with your own PNG/ICO as needed.\n')

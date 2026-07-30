@@ -1,5 +1,11 @@
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
+  /* Render native controls (date/time picker popups, their calendar/clock icons, spinners,
+     default scrollbars) in dark mode so they match the app instead of showing white/black. */
+  color-scheme: dark;
+  /* Tint native controls that honor it (checkboxes, radios, range) with the app accent. Note: the
+     date/time picker popup's selection highlight is browser-drawn and does NOT follow this. */
+  accent-color: var(--accent);
   /* Colors */
   --bg-base:        #0f0f13;
   --bg-surface:     #17171e;
@@ -24,6 +30,31 @@
 
   --border:         rgba(255, 255, 255, 0.06);
   --border-hover:   rgba(255, 255, 255, 0.12);
+
+  /* Status surfaces: badge/card tones, overridden in the light block below. */
+  --debt-text:      #fcd34d;
+  --debt-bg:        rgba(120, 53, 15, 0.35);
+  --debt-border:    rgba(217, 119, 6, 0.45);
+  --debt-fill:      #f59e0b;
+
+  --banked-text:    #86efac;
+  --banked-bg:      rgba(16, 68, 30, 0.35);
+  --banked-border:  rgba(74, 222, 128, 0.35);
+
+  --ok-soft-bg:     rgba(74, 222, 128, 0.08);
+  --ok-soft-border: rgba(74, 222, 128, 0.15);
+  --met-border:     rgba(74, 222, 128, 0.2);
+
+  --overdue-bg:     linear-gradient(145deg, rgba(69, 10, 10, 0.55), rgba(15, 15, 19, 0.95));
+  --overdue-border: rgba(220, 38, 38, 0.55);
+  --overdue-title:  #fecaca;
+
+  --missed-bg:      linear-gradient(145deg, rgba(69, 42, 10, 0.4), rgba(15, 15, 19, 0.92));
+  --missed-border:  rgba(217, 119, 6, 0.45);
+  --missed-title:   #fde68a;
+
+  --contrib-empty-bg:     #161b22;
+  --contrib-empty-border: rgba(255, 255, 255, 0.06);
 
   /* Typography */
   --font-sans:   'Inter', system-ui, sans-serif;
@@ -53,6 +84,80 @@
   --dur-slow: 350ms;
 }
 
+/* ─── Light theme ───────────────────────────────────────────────────────────────
+   Overrides only the color tokens; spacing/typography/radii are theme-agnostic.
+   Set on <html data-theme="light"> by an inline script (from a ?theme= query) so it
+   applies before first paint, and live-toggled from Settings. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-base:        #eceef3;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #ffffff;
+  --bg-overlay:     #e1e4ea;     /* visible gray: scrollbar thumb, hovers, subtle chips */
+  --bg-hover:       #e6e9ef;
+
+  --accent-glow:    rgba(224, 90, 58, 0.20);
+  --break-color:    #2d8fc4;
+  --break-dim:      #2474a3;
+  --break-glow:     rgba(45, 143, 196, 0.18);
+  --success:        #16a34a;
+  --warning:        #c2740a;
+  --danger:         #dc2626;
+
+  --text-primary:   #1b1e27;
+  --text-secondary: #565d6e;
+  --text-muted:     #9298a6;
+  --text-inverse:   #f0f0f5;
+
+  --border:         rgba(0, 0, 0, 0.10);
+  --border-hover:   rgba(0, 0, 0, 0.16);
+
+  --shadow-sm:  0 1px 2px rgba(20, 20, 40, 0.10);
+  --shadow-md:  0 4px 14px rgba(20, 20, 40, 0.10);
+  --shadow-lg:  0 10px 30px rgba(20, 20, 40, 0.14);
+  --shadow-accent: 0 0 28px var(--accent-glow);
+  --shadow-break:  0 0 28px var(--break-glow);
+
+  /* Status surfaces tuned for a light background (darker text, faint tinted fills). */
+  --debt-text:      #92610a;
+  --debt-bg:        rgba(245, 158, 11, 0.15);
+  --debt-border:    rgba(217, 119, 6, 0.40);
+
+  --banked-text:    #15803d;
+  --banked-bg:      rgba(34, 197, 94, 0.14);
+  --banked-border:  rgba(34, 197, 94, 0.40);
+
+  --ok-soft-bg:     rgba(34, 197, 94, 0.10);
+  --ok-soft-border: rgba(34, 197, 94, 0.25);
+  --met-border:     rgba(34, 197, 94, 0.35);
+
+  --overdue-bg:     linear-gradient(145deg, rgba(254, 226, 226, 0.95), rgba(255, 255, 255, 0.98));
+  --overdue-border: rgba(220, 38, 38, 0.45);
+  --overdue-title:  #b91c1c;
+
+  --missed-bg:      linear-gradient(145deg, rgba(254, 243, 199, 0.90), rgba(255, 255, 255, 0.98));
+  --missed-border:  rgba(217, 119, 6, 0.45);
+  --missed-title:   #b45309;
+
+  --contrib-empty-bg:     #e6e9ef;
+  --contrib-empty-border: rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="light"] .badge-pending,
+:root[data-theme="light"] .badge-deadline-muted {
+  background: rgba(0, 0, 0, 0.06);
+}
+:root[data-theme="light"] .badge-ominous {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+  border-color: rgba(220, 38, 38, 0.35);
+}
+:root[data-theme="light"] .badge-missed-cycle {
+  background: rgba(217, 119, 6, 0.14);
+  color: #92610a;
+  border-color: rgba(217, 119, 6, 0.40);
+}
+
 /* ─── Reset ──────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; overflow: hidden; }
@@ -68,7 +173,7 @@ body {
 button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
 input, textarea { font: inherit; color: inherit; background: none; border: none; outline: none; }
 a { color: inherit; text-decoration: none; }
-::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-overlay); border-radius: var(--r-full); }
 
@@ -134,11 +239,20 @@ a { color: inherit; text-decoration: none; }
   padding: 48px 0 var(--sp-4);
   gap: var(--sp-2);
   flex-shrink: 0;
-  z-index: 10;
+  /* Above the Schedule tab's sticky header (z-index 10) so hover tooltips aren't clipped by it. */
+  z-index: 50;
 }
 .sidebar__logo {
+  position: relative;
   margin-bottom: var(--sp-6);
   line-height: 0;
+  border-radius: var(--r-md);
+  padding: var(--sp-1);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.sidebar__logo:hover {
+  background: var(--bg-overlay);
+  transform: scale(1.08);
 }
 .sidebar__logo img {
   width: 36px;
@@ -147,6 +261,88 @@ a { color: inherit; text-decoration: none; }
   display: block;
   -webkit-user-drag: none;
   user-select: none;
+}
+
+/* ─── About modal ─────────────────────────────────────────────────────────────── */
+.about-modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--r-xl);
+  padding: var(--sp-8);
+  width: min(320px, 90vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  box-shadow: var(--shadow-lg), 0 0 60px var(--accent-glow);
+  animation: slideUp var(--dur-slow) var(--ease);
+  text-align: center;
+}
+.about-modal__icon {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 20px var(--accent-glow));
+  -webkit-user-drag: none;
+  /* Animation classes are applied by the Mascot component, not baked in here. */
+  cursor: pointer;
+}
+
+/* Brighter glow on light theme, where the default --accent-glow nearly vanishes. */
+:root[data-theme="light"] .about-modal__icon,
+:root[data-theme="light"] .objectives-empty__mascot {
+  filter: drop-shadow(0 0 18px rgba(224, 90, 58, 0.5));
+}
+
+@keyframes mascot-jiggle {
+  0%   { transform: rotate(0deg)   scale(1); }
+  10%  { transform: rotate(-14deg) scale(1.12); }
+  25%  { transform: rotate(11deg)  scale(1.14); }
+  40%  { transform: rotate(-8deg)  scale(1.08); }
+  55%  { transform: rotate(5deg)   scale(1.04); }
+  70%  { transform: rotate(-3deg)  scale(1.02); }
+  85%  { transform: rotate(1deg)   scale(1.01); }
+  100% { transform: rotate(0deg)   scale(1); }
+}
+
+/* Click-to-escalate: the shake scales with --poke (the click tier, 1..N), so each
+   successive poke whips the mascot harder. Re-trigger by remounting (key=tier). */
+.is-poked {
+  animation: mascot-poke 0.5s var(--ease);
+  cursor: pointer;
+}
+@keyframes mascot-poke {
+  0%   { transform: rotate(0deg) scale(1); }
+  20%  { transform: rotate(calc(var(--poke, 1) * -7deg)) scale(calc(1 + var(--poke, 1) * 0.03)); }
+  45%  { transform: rotate(calc(var(--poke, 1) *  6deg)) scale(calc(1 + var(--poke, 1) * 0.04)); }
+  70%  { transform: rotate(calc(var(--poke, 1) * -4deg)) scale(calc(1 + var(--poke, 1) * 0.02)); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.about-modal__name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+.about-modal__message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 240px;
+  min-height: 2lh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Escalated line once the About tomato has been poked (matches Objectives). */
+.about-modal__message--poke {
+  color: var(--accent);
+  font-weight: 600;
+}
+.about-modal__dismiss {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
 }
 .sidebar__nav {
   display: flex;
@@ -173,21 +369,24 @@ a { color: inherit; text-decoration: none; }
 .nav-item__tooltip {
   position: absolute;
   left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 500;
+  line-height: normal;
   padding: var(--sp-1) var(--sp-3);
   border-radius: var(--r-sm);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(-4px);
   transition: all var(--dur-fast) var(--ease);
   border: 1px solid var(--border);
   z-index: 100;
 }
-.nav-item:hover .nav-item__tooltip { opacity: 1; transform: translateX(0); }
+.nav-item:hover .nav-item__tooltip,
+.sidebar__logo:hover .nav-item__tooltip { opacity: 1; transform: translateY(-50%) translateX(0); }
 
 /* Widget toggle pinned to bottom of sidebar */
 .sidebar__widget-toggle {
@@ -212,6 +411,10 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  /* Hold the scrollbar's 4px whether or not it's showing, so content changing height mid-view
+     doesn't make the bar appear/vanish and shift everything sideways. Same reason .modal__body
+     reserves it. */
+  scrollbar-gutter: stable;
   padding: var(--sp-8);
 }
 .view-header {
@@ -295,7 +498,7 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid rgba(251, 191, 36, 0.35);
 }
 
-/* Objective type + deadline line — grey (calm) vs orange (needs attention) */
+/* Objective type + deadline line: gray (calm) vs orange (needs attention) */
 .badge-deadline-muted {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
@@ -325,7 +528,9 @@ a { color: inherit; text-decoration: none; }
 /* ─── Input ──────────────────────────────────────────────────────────────────── */
 .input {
   width: 100%;
-  padding: var(--sp-3) var(--sp-4);
+  height: 40px;
+  padding: 0 var(--sp-4);
+  box-sizing: border-box;
   background: var(--bg-overlay);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -356,23 +561,47 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-elevated);
   border: 1px solid var(--border-hover);
   border-radius: var(--r-xl);
-  padding: var(--sp-8);
-  width: min(560px, 94vw);
+  padding: var(--sp-6);
+  width: min(620px, 94vw);
+  /* Never taller than the viewport; body scrolls if content overflows */
+  max-height: min(92vh, 860px);
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   animation: slideUp var(--dur-slow) var(--ease);
 }
 .modal__header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: var(--sp-6);
+  flex-shrink: 0;
+  margin-bottom: var(--sp-4);
 }
 .modal__title {
   font-size: 18px; font-weight: 700;
   letter-spacing: -0.02em;
 }
-.modal__body { display: flex; flex-direction: column; gap: var(--sp-4); }
+.modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  /* Content truncates/wraps, so horizontal scroll is never wanted. Setting this explicitly also
+     stops the browser from promoting overflow-x to `auto` (which it does when only overflow-y is
+     set), which was showing a stray horizontal scrollbar on the slightest overflow. */
+  overflow-x: hidden;
+  /* Nice scrollbar on Windows */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) transparent;
+  /* Reserve the scrollbar gutter always, so content width doesn't shift when the scrollbar appears
+     (e.g. switching one-time↔repeating, or toggling Advanced). Do NOT re-add a padding-right +
+     negative-margin scrollbar hack here: it pulls content back over the reserved gutter and
+     reintroduces the width jump this replaced. */
+  scrollbar-gutter: stable;
+  min-height: 0;
+}
 .modal__footer {
   display: flex; gap: var(--sp-3); justify-content: flex-end;
-  margin-top: var(--sp-6);
+  flex-shrink: 0;
+  margin-top: var(--sp-4);
 }
 
 /* ─── Animations ─────────────────────────────────────────────────────────────── */

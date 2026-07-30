@@ -1,9 +1,11 @@
 /**
- * Optional: best-effort removal of stray packaging files under `dist/`.
- * Does not delete `release/` — if packaging fails because that folder is locked,
- * delete `release` yourself in Explorer (or close the app using it), then rebuild.
+ * Pre-package clean: removes the electron-builder output dir (`release/`) and stray
+ * `dist/` packaging files so repeat builds don't accumulate. A full `--win-all` build is
+ * ~1.3 GB (three *-unpacked trees + three installers), and nothing overwrites the unpacked
+ * dirs of architectures you stop building, so without this they pile up across builds.
  *
- * Never throws; safe to run before `npm run electron:build` if you want.
+ * Best-effort; never throws. If `release/` is locked (e.g. you're running an unpacked
+ * build from it), it logs and continues so electron-builder can still overwrite what it can.
  */
 'use strict'
 
@@ -13,11 +15,15 @@ const path = require('path')
 function safeRm(p) {
   try {
     fs.rmSync(p, { recursive: true, force: true })
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn(`  • could not remove ${p}: ${e.message}`)
   }
 }
 
+// The configured electron-builder output dir (package.json build.directories.output).
+safeRm(path.resolve('release'))
+
+// Stray packaging files electron-builder sometimes drops into the renderer dist dir.
 const distDir = path.resolve('dist')
 if (fs.existsSync(distDir)) {
   safeRm(path.join(distDir, 'win-unpacked'))
@@ -34,7 +40,4 @@ if (fs.existsSync(distDir)) {
   }
 }
 
-console.log(
-  'Optional clean finished (dist stray artifacts only). ' +
-    'To fully reset Windows package output, delete the `release` folder manually if needed.',
-)
+console.log('Pre-package clean finished (removed release/ + dist stray artifacts).')

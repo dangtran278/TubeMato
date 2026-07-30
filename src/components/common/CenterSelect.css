@@ -1,0 +1,207 @@
+.cselect {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.cselect__button {
+  position: relative;
+  width: auto;
+  min-width: 260px;
+  max-width: 560px;   /* roomy enough for "title  group" in the objective pickers */
+  display: flex;
+  align-items: center;
+  justify-content: center;   /* value sits in the middle */
+  padding: 0 26px;           /* symmetric; arrow lives in the right pad */
+  cursor: pointer;
+}
+
+.cselect__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Group color dot + muted group-name hint inside an option (and the closed value). */
+.cselect__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.cselect__hint {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 0.92em;
+}
+/* Keep the group-name hint legible on the highlighted (accent) row. */
+.cselect__option--active .cselect__hint { color: rgba(255, 255, 255, 0.8); }
+
+/* Reveal-tooltip content (full title over group) for a truncated option: a stacked .tooltip-bubble. */
+.cselect__tip-title { font-weight: 600; overflow-wrap: anywhere; }
+.cselect__tip-group { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* Arrow pinned to the right edge, independent of the centered value. */
+.cselect__arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  margin-top: -2px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-muted);
+}
+
+/* Popup: portaled to <body> and positioned with `position: fixed` (left/width/top/bottom set
+   inline from the button's viewport rect), so a scrolling/overflow ancestor can't clip it.
+   z-index sits above the modal backdrop (5000) and the Analytics overlay (10000). */
+.cselect__menu {
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: var(--sp-1);
+  background: var(--bg-elevated, var(--bg-overlay));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 10001;
+}
+
+.cselect__option {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: none;
+  border-radius: var(--r-sm, 6px);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  cursor: pointer;
+}
+
+/* Hover is driven off the ROW, not the option: the tools overlay the option, so they're not its
+   descendants and `.cselect__option:hover` would drop the highlight when the pointer reaches one. */
+.cselect__optrow:hover .cselect__option { background: var(--bg-overlay); }
+
+/* Both :hover forms must be listed, or the row-hover rule outranks the plain active one and the
+   selected row repaints gray. */
+.cselect__option--active,
+.cselect__optrow:hover .cselect__option--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.cselect__optrow { position: relative; display: flex; align-items: stretch; }
+.cselect__optrow .cselect__option { flex: 1; min-width: 0; }
+/* Out of flow, so the option's background spans the whole row. The space they cover is given back
+   as option padding (--cs-tools), so no label can run underneath them and no scrim is needed. */
+.cselect__opttools {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  /* No gap, and a matching inset instead: the icons are drawn smaller than their boxes, so equal
+     box spacing reads as a bigger gap between the two icons than before the first one. */
+  padding-right: var(--cs-tool-pad);
+  opacity: 0;
+  /* At rest they overlay the option and must not swallow its clicks. */
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.cselect__optrow:hover .cselect__opttools,
+.cselect__opttools:focus-within { opacity: 1; pointer-events: auto; }
+.cselect__optrow--tools .cselect__option { padding-right: calc(var(--sp-3) + var(--cs-tools)); }
+
+/* Squares rather than full-height slots, so the hit target is a button, not a bar the height of the
+   row. Size comes from TOOL_W (same as .fycard__tool). */
+.cselect__optedit,
+.cselect__optdelete {
+  flex-shrink: 0;
+  width: var(--cs-tool-w);
+  height: var(--cs-tool-w);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+/* Neither glyph is centered in its own viewBox, so flex centering alone leaves them ~1.6px apart
+   vertically. Nudge each back to the middle; .fycard__tool does the same for the trash. */
+.cselect__optdelete svg { transform: translateY(-1px); }
+.cselect__optedit svg { transform: translateY(1px); }
+/* Color only, no background: the row is already tinted, so a second background reads as a stray
+   patch (same reason .fycard__tool doesn't repaint either). */
+.cselect__optedit:hover { color: var(--text-primary); }
+/* Destructive tools go red on hover wherever they appear (see .fycard__tool--del for the twin). */
+.cselect__optdelete:hover { color: var(--danger); }
+
+/* On the selected row the accent runs full width, so the tools sit on orange: recolor them or they
+   read as muted gray on accent and --danger is illegible. */
+.cselect__option--active ~ .cselect__opttools button { color: rgba(255, 255, 255, 0.8); }
+.cselect__option--active ~ .cselect__opttools button:hover { color: #fff; }
+
+/* Left-aligned mode: dot, title, group, laid out as a clean two-part list row. Used by the group
+   filter and the objective pickers, where a centered title with a far-left dot reads as cluttered. */
+.cselect--left .cselect__button { justify-content: flex-start; }
+.cselect--left .cselect__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow: hidden;
+}
+/* The closed value has no group to balance a left-anchored dot/title against, so a groupless
+   selection centers instead of sitting flush left. */
+.cselect--left .cselect__value--nogroup { justify-content: center; }
+
+.cselect--left .cselect__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  overflow: hidden;
+}
+.cselect--left .cselect__dot { flex-shrink: 0; }
+/* Rows without a group have no dot, so pad the title over by the dot's own footprint (width +
+   margin + gap) to keep it aligned with rows that do have one. */
+.cselect--left .cselect__option:not(:has(.cselect__dot)) {
+  padding-left: calc(var(--sp-3) + 21px);
+}
+
+/* Title and group each keep their natural width when they fit; when together they overflow, both
+   shrink in proportion to their length, so the short side stays whole and the long side gets the
+   "…". Neither uses flex-grow, so a short title doesn't eat the row and starve the group. */
+.cselect--left .cselect__optlabel,
+.cselect--left .cselect__vallabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cselect--left .cselect__hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;   /* pin to the right; collapses to a gap only when the row overflows */
+  padding-left: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

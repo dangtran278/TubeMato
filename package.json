@@ -1,7 +1,7 @@
 {
   "name": "TubeMato",
-  "version": "0.2.0",
-  "description": "Lightweight Pomodoro timer with YouTube integration and productivity tracking",
+  "version": "1.0.0",
+  "description": "Pomodoro timer with YouTube integration and a history of your failures",
   "author": {
     "name": "Dantern"
   },
@@ -9,40 +9,42 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "electron:dev": "vite",
     "clean:package-artifacts": "node scripts/clean-package-output.js",
-    "electron:build": "npm run build && node scripts/build-win-icon.js && electron-builder --win nsis --x64",
-    "electron:build:win-all": "npm run build && node scripts/build-win-icon.js && electron-builder --win nsis --x64 --ia32 --arm64",
-    "electron:build:linux": "npm run build && electron-builder --linux",
-    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64",
+    "electron:build:win-all": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64 --ia32 --arm64",
+    "electron:build:linux": "npm run clean:package-artifacts && npm run build && electron-builder --linux",
+    "electron:build:mac": "npm run clean:package-artifacts && npm run build && electron-builder --mac",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "node scripts/seed-dev-data.js",
     "generate-icons": "node scripts/generate-icons.js",
     "generate-extension-icons": "node scripts/generate-extension-icons.js",
+    "generate-menu-icons": "electron scripts/generate-menu-icons.js",
     "bootstrap:icons": "npm run generate-icons && npm run generate-extension-icons"
   },
   "dependencies": {
-    "electron-auto-launch": "^5.0.6",
-    "electron-store": "^8.2.0",
-    "uuid": "^9.0.1",
-    "zustand": "^4.5.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "electron-store": "^8.2.0"
   },
   "devDependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@types/node": "^20.12.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
-    "@types/node": "^20.12.0",
     "@types/uuid": "^9.0.8",
-    "@types/youtube": "^0.1.1",
     "@vitejs/plugin-react": "^4.3.1",
-    "concurrently": "^8.2.2",
     "electron": "^42.0.0",
     "electron-builder": "^26.8.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.4.5",
+    "uuid": "^9.0.1",
     "vite": "^5.2.8",
     "vite-plugin-electron": "^0.28.4",
     "vite-plugin-electron-renderer": "^0.14.5",
-    "wait-on": "^7.2.0"
+    "vitest": "^2.1.8",
+    "zustand": "^4.5.2"
   },
   "build": {
     "appId": "com.tubemato.desktop",
@@ -52,9 +54,6 @@
       "output": "release"
     },
     "icon": "assets/icons/app.ico",
-    "asarUnpack": [
-      "assets/icons/**"
-    ],
     "win": {
       "target": "nsis",
       "signAndEditExecutable": false,
@@ -73,8 +72,7 @@
       "!dist/*.blockmap",
       "!dist/builder-effective-config.yaml",
       "!dist/builder-debug.yml",
-      "dist-electron/**/*",
-      "assets/icons/**/*"
+      "dist-electron/**/*"
     ],
     "extraResources": [
       {

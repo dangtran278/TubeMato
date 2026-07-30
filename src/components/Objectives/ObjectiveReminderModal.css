@@ -1,0 +1,121 @@
+/* In-app objective reminder popup. Scan layer = bold title + aligned progress; flavor
+   layer = the muted roast sub-line. Title + footer pinned; the row list scrolls. */
+
+.reminder-modal {
+  width: min(460px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg), 0 0 60px var(--accent-glow);
+  overflow: hidden;
+}
+
+/* Mascot + title together, so it reads as the tomato delivering the roast. */
+.reminder-modal__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.reminder-modal__mascot {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+}
+.reminder-modal__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.reminder-modal__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--sp-1) 0;
+}
+
+/* Severity is shown as a colored left edge (red = missed/owed, yellow = approaching/behind,
+   neutral = a nudge). The edge is always 3px, transparent for neutral, so titles stay aligned. */
+.reminder-row {
+  padding: var(--sp-3) var(--sp-5);
+  border-left: 3px solid transparent;
+}
+.reminder-row--red { border-left-color: var(--danger); }
+.reminder-row--yellow { border-left-color: var(--warning); }
+.reminder-row + .reminder-row {
+  border-top: 1px solid var(--border);
+}
+
+.reminder-row__main { min-width: 0; }
+
+/* The scan line: title flush-left, progress cluster flush-right (aligned lane). */
+.reminder-row__scan {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* Calm mode has no roast sub-line, so center the row instead of top-aligning it. */
+.reminder-row__scan--compact {
+  align-items: center;
+}
+.reminder-row__scan--compact .reminder-row__progress {
+  padding-top: 0;
+}
+
+/* TitleWithGroup fills the row's free space and balances title vs group internally. */
+.reminder-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Progress bar with the score directly below it. */
+.reminder-row__progress {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding-top: 4px;
+}
+.reminder-row__bar {
+  width: 120px;
+}
+.reminder-row__score {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.reminder-row__debt { color: var(--warning); }
+
+/* Flavor layer: muted, smaller, read only when a title catches the eye. */
+.reminder-row__roast {
+  margin-top: var(--sp-1);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+/* Calm mode's factual sub-line in the roast's place: the cycle due date. */
+.reminder-row__due {
+  margin-top: var(--sp-1);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.reminder-modal__footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--border);
+}

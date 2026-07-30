@@ -15,10 +15,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@electron/*": ["electron/*"]
+      "@/*": ["./src/*"],
+      "@electron/*": ["./electron/*"]
     }
   },
   "include": ["src", "src/types", "electron", "widget"],

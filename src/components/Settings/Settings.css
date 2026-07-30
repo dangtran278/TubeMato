@@ -73,19 +73,32 @@
   gap: var(--sp-2);
 }
 
-.settings-select-wide {
-  width: 100%;
-  max-width: 22rem;
-  min-width: 0;
-}
+/* CenterSelect on a settings row. Its default button min/max width (220–320px) is meant for the
+   Timer's wide picker; here we override it so each dropdown matches the compact native <select>
+   widths it replaced. The width lives on the .cselect wrapper; the button just fills it. */
+.settings-timepicker { width: 160px; flex: 0 0 auto; }
+.settings-cselect { width: 180px; }
+.settings-cselect-narrow { width: 160px; }
+/* Explicit rem width (not 100%): the control is shrink-to-fit, so a percentage child collapses to
+   its text width. A fixed rem keeps the timezone dropdown wide enough for long IANA names. */
+.settings-cselect-wide { width: 16rem; }
+.settings-cselect,
+.settings-cselect-narrow,
+.settings-cselect-wide { max-width: 100%; }
+.settings-cselect .cselect__button,
+.settings-cselect-narrow .cselect__button,
+.settings-cselect-wide .cselect__button { width: 100%; min-width: 0; max-width: none; }
 
+/* The timezone control needs more room than the other settings dropdowns: IANA names get long
+   ("America/Argentina/Buenos_Aires"), so let this one row's control grow past the shared 22rem cap. */
+.settings-row__control:has(.settings-tz-block) { max-width: min(30rem, 100%); }
 .settings-tz-block {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--sp-2);
   width: 100%;
-  max-width: 22rem;
+  max-width: 30rem;
 }
 
 .settings-tz-offset {
@@ -99,7 +112,7 @@
 }
 
 .settings-num {
-  width: 80px;
+  width: 96px;   /* fits 5 digits plus the number spinner */
   text-align: center;
   font-family: var(--font-mono);
 }
@@ -136,16 +149,22 @@
 .toggle--on .toggle__thumb { transform: translateX(20px); }
 
 /* ─── Footer ─────────────────────────────────────────────────────────────────── */
-.settings-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-4);
-  flex-wrap: wrap;
-  padding-top: var(--sp-2);
+.settings-autosaved {
+  position: fixed;
+  bottom: 24px;
+  right: 28px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  pointer-events: none;
+  animation: settings-fadein 0.15s ease;
 }
 
-.settings-save-hint {
-  font-size: 11px;
-  color: var(--text-muted);
+@keyframes settings-fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

@@ -1,338 +1,304 @@
-import { Notification } from 'electron'
-import { store, getCurrentLog } from './store'
+import { store, getObjectiveLogs, getCurrentLog } from './store'
+import { calendarDateKey, resolveTimeZone, wallClockHourMinute } from './calendarDate'
+import type { Objective, ObjectiveReminderItem, ObjectiveReminderPayload, DaySummary, Settings } from './types'
+import { syncRepeatingObjectivePeriods } from './objectiveSync'
+import { buildDaySummary } from './daySummary'
+import { repeatingPeriodEndDate, isObjectiveMet, addCalendarDays } from './objectiveDebt'
+import { selectDueAlerts, dayIndexOf, type DueAlert } from './scheduleFire'
 import {
-  calendarDateKey,
-  previousCalendarDateKey,
-  resolveTimeZone,
-} from './calendarDate'
-import type {
-  DaySummary,
-  Objective,
-  ObjectiveLog,
-  ObjectiveProgress,
-  PomodoroSessionRecord,
-  BreakExtension,
-  ProcrastinationEvent,
-  Settings,
-} from './types'
+  objectiveReminderBatchTitle,
+  objectiveReminderBody,
+  objectiveCadenceNudge,
+  dailySummaryNotificationTitle,
+  dailySummaryNotificationBody,
+  scheduleAlertBody,
+  type PoolChooser,
+} from './personalityCopy'
+import { selectReminderObjectives } from './objectiveReminder'
+import { planReminderDelivery, planSummaryDelivery } from './reminderDispatch'
+import { bagPick, emptyRoastBagState, type RoastBagState } from './roastBag'
 
-/**
- * Bell-completed pomodoro with focus — summary “pomodoro count”.
- * Legacy rows omit `naturalComplete` → treated as completed.
- */
-function countsAsFinishedPomodoro(s: PomodoroSessionRecord): boolean {
-  if (s.durationMinutes <= 0) return false
-  return s.naturalComplete !== false
+/** Current wall-clock time as zero-padded "HH:MM" in the objective calendar's timezone. */
+function nowHHMMIn(tz: string): string {
+  const { hour, minute } = wallClockHourMinute(new Date(), tz)
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
-/** Work block end that breaks streak (skip work, pause during work, empty / zero-time end). */
-function isDirtyWorkEndForStreak(s: PomodoroSessionRecord): boolean {
-  if (s.durationMinutes <= 0) return true
-  if (s.naturalComplete === false) return true
-  return Boolean(s.hadPauseDuringWork)
-}
+// The end-of-day summary lives in ./daySummary (pure). WHICH objectives to remind about and in
+// what order is decided purely by selectReminderObjectives (./objectiveReminder), the single
+// source of truth shared with the in-app popup. This module owns only the Electron/store-coupled
+// orchestration: build the roast strings, persist the popup payload, and fire the OS toast at
+// most once per day.
 
-/** +1 streak at work `endAt` (bell finished, no pause while running). */
-function isGoodStreakIncrement(s: PomodoroSessionRecord): boolean {
-  if (s.durationMinutes <= 0) return false
-  if (s.naturalComplete === false) return false
-  return !s.hadPauseDuringWork
-}
-
-/**
- * Longest streak of bell-finished, no–work-pause pomodoros from **logged events only**
- * (no comparison to global `workDuration` — future per-objective lengths stay compatible).
- *
- * Resets: break extension; procrastination start (past grace); pause during break / grace / overdue wait
- * (`hadPauseDuringInterWorkGapBefore` → reset at that work block’s `startAt`); skip work; pause during work.
- * Skip-break does not log and does not reset.
- */
-function longestPomodoroStreakFromLog(
-  sessions: PomodoroSessionRecord[],
-  extensions: Pick<BreakExtension, 'timestamp'>[],
-  procrastination: Pick<ProcrastinationEvent, 'startAt'>[],
-): number {
-  type Ev = { t: number; pri: number; kind: 'reset' | 'inc' }
-  const ev: Ev[] = []
-
-  for (const e of extensions) {
-    const t = Date.parse(e.timestamp)
-    if (!Number.isNaN(t)) ev.push({ t, pri: 0, kind: 'reset' })
+/** A Windows toast shows ~3 body lines: 1 objective keeps its full roast; many → a compact list. */
+function buildToastBody(items: ObjectiveReminderItem[]): string {
+  const trim = (t: string) => (t.length > 30 ? `${t.slice(0, 29)}…` : t)
+  if (items.length === 1) return `• ${items[0].title}: ${items[0].roast}`
+  if (items.length <= 3) {
+    return items.map(i => `• ${trim(i.title)} (${i.completed}/${i.target})`).join('\n')
   }
-  for (const p of procrastination) {
-    const t = Date.parse(p.startAt)
-    if (!Number.isNaN(t)) ev.push({ t, pri: 1, kind: 'reset' })
-  }
-  for (const s of sessions) {
-    const ts = Date.parse(s.startAt)
-    if (!Number.isNaN(ts) && s.hadPauseDuringInterWorkGapBefore) {
-      ev.push({ t: ts, pri: 2, kind: 'reset' })
-    }
-  }
-  for (const s of sessions) {
-    const te = Date.parse(s.endAt)
-    if (Number.isNaN(te)) continue
-    if (isGoodStreakIncrement(s)) ev.push({ t: te, pri: 4, kind: 'inc' })
-    else if (isDirtyWorkEndForStreak(s)) ev.push({ t: te, pri: 3, kind: 'reset' })
-  }
-
-  ev.sort((a, b) => (a.t !== b.t ? a.t - b.t : a.pri - b.pri))
-
-  let cur = 0
-  let best = 0
-  for (const e of ev) {
-    if (e.kind === 'reset') cur = 0
-    else {
-      cur++
-      best = Math.max(best, cur)
-    }
-  }
-  return best
-}
-
-// ─── Build end-of-day summary ─────────────────────────────────────────────────
-
-/**
- * Summarizes the **previous calendar day** in the user’s `calendarTimeZone`
- * (same `YYYY-MM-DD` keys as logs for that zone).
- */
-export function buildDaySummary(): DaySummary {
-  const settings = store.get('settings') as Settings
-  const tz = resolveTimeZone(settings.calendarTimeZone)
-  const date = previousCalendarDateKey(new Date(), tz)
-  const log = getCurrentLog()
-
-  const sessionsThatDay = log.sessions.filter(s => s.date === date)
-  const procThatDay = log.procrastinationEvents.filter(e => e.date === date)
-  const extThatDay = log.breakExtensions.filter(e => e.date === date)
-
-  const totalFocusMinutes = sessionsThatDay.reduce((acc, s) => acc + s.durationMinutes, 0)
-  const pomodorosCompleted = sessionsThatDay.filter(countsAsFinishedPomodoro).length
-  const longestPomodoroStreak = longestPomodoroStreakFromLog(sessionsThatDay, extThatDay, procThatDay)
-  const procrastinationMinutes = Math.round(procThatDay.reduce((acc, e) => acc + e.durationSeconds, 0) / 60)
-  const breakExtensionMinutes = extThatDay.reduce((acc, e) => acc + e.minutesAdded, 0)
-
-  const objectiveCheckinsToday = log.objectiveLogs.filter(
-    l => calendarDateKey(new Date(l.completedAt), tz) === date,
-  ).length
-
-  const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
-  const objectiveProgress: ObjectiveProgress[] = objectives
-    .filter((o: Objective) => isObjectiveDueToday(o, date))
-    .map((o: Objective) => {
-      const completed = countCompletionsForCurrentPeriod(o, log.objectiveLogs)
-      return {
-        objectiveId: o.id,
-        title: o.title,
-        completed,
-        target: o.targetCompletions,
-        met: completed >= o.targetCompletions,
-        dueToday: true,
-      }
-    })
-
-  return {
-    date,
-    calendarTimeZone: tz,
-    totalFocusMinutes,
-    pomodorosCompleted,
-    longestPomodoroStreak,
-    objectiveCheckinsToday,
-    procrastinationMinutes,
-    breakExtensionMinutes,
-    objectiveProgress,
-  }
-}
-
-// ─── Objective period helpers (summary UI) ────────────────────────────────────
-
-function isObjectiveDueToday(objective: Objective, today: string): boolean {
-  if (objective.type === 'one-time') {
-    return !objective.dueDate || objective.dueDate <= today
-  }
-  if (!objective.periodStart || !objective.recurrenceDays) return false
-  const start = new Date(objective.periodStart)
-  const now = new Date(today)
-  const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / 86_400_000)
-  const period = objective.recurrenceDays
-
-  if (objective.reminderMode === 'end') {
-    return daysSinceStart > 0 && daysSinceStart % period === 0
-  }
-
-  const interval = Math.floor(period / objective.targetCompletions)
-  return interval > 0 && daysSinceStart > 0 && daysSinceStart % interval === 0
-}
-
-function countCompletionsForCurrentPeriod(objective: Objective, objectiveLogs: ObjectiveLog[]): number {
-  const tz = resolveTimeZone(store.get('settings').calendarTimeZone)
-  const periodStart = objective.periodStart ?? calendarDateKey(new Date(), tz)
-  return objectiveLogs.filter(
-    gl => gl.objectiveId === objective.id && gl.periodStart === periodStart
-  ).length
-}
-
-// ─── Calendar helpers (notifications) ──────────────────────────────────────────
-
-function addCalendarDays(isoDate: string, days: number): string {
-  const d = new Date(isoDate + 'T12:00:00.000Z')
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
-
-function calendarDaysDiff(fromIso: string, toIso: string): number {
-  const a = new Date(fromIso + 'T12:00:00.000Z').getTime()
-  const b = new Date(toIso + 'T12:00:00.000Z').getTime()
-  return Math.round((b - a) / 86_400_000)
-}
-
-function repeatingPeriodEndDate(o: Objective): string | null {
-  if (o.type !== 'repeating' || !o.periodStart || !o.recurrenceDays) return null
-  return addCalendarDays(o.periodStart, o.recurrenceDays - 1)
-}
-
-function daysElapsedInPeriod(periodStart: string, today: string): number {
-  return calendarDaysDiff(periodStart, today)
-}
-
-function isSpreadCheckpointDay(o: Objective, today: string): boolean {
-  if (o.reminderMode !== 'spread' || !o.periodStart || !o.recurrenceDays) return false
-  const daysSinceStart = daysElapsedInPeriod(o.periodStart, today)
-  const period = o.recurrenceDays
-  const interval = Math.floor(period / o.targetCompletions)
-  return interval > 0 && daysSinceStart > 0 && daysSinceStart % interval === 0
-}
-
-function isSpreadBehindLinearPace(o: Objective, completed: number, today: string): boolean {
-  if (o.reminderMode !== 'spread' || !o.periodStart || !o.recurrenceDays) return false
-  const D = o.recurrenceDays
-  const need = o.targetCompletions
-  if (D <= 0 || need <= 0) return false
-  const elapsed = daysElapsedInPeriod(o.periodStart, today)
-  if (elapsed <= 0) return false
-  const minExpected = Math.floor((need * elapsed) / D)
-  return completed < minExpected
-}
-
-/** One-time or repeating+end: notify when ≤2 calendar days until deadline (incl. overdue). */
-function shouldNotifyOneTimeOrEnd(o: Objective, completed: number, today: string): boolean {
-  if (completed >= o.targetCompletions) return false
-  if (o.type === 'one-time') {
-    if (!o.dueDate) return false
-    return calendarDaysDiff(today, o.dueDate) <= 2
-  }
-  if (o.type === 'repeating' && o.reminderMode === 'end') {
-    const end = repeatingPeriodEndDate(o)
-    if (!end) return false
-    return calendarDaysDiff(today, end) <= 2
-  }
-  return false
-}
-
-/**
- * Repeating+spread: checkpoint days; last-day pressure; behind pace only every k days
- * (k = floor(period/target), e.g. 3 in 7 → ping every ~2 days while behind).
- */
-function shouldNotifySpread(o: Objective, completed: number, today: string): boolean {
-  if (o.type !== 'repeating' || o.reminderMode !== 'spread') return false
-  if (completed >= o.targetCompletions) return false
-  if (!o.periodStart || !o.recurrenceDays) return false
-
-  const D = o.recurrenceDays
-  const need = o.targetCompletions
-  const k = Math.max(1, Math.floor(D / need))
-  const elapsed = daysElapsedInPeriod(o.periodStart, today)
-  if (elapsed <= 0) return false
-
-  const end = repeatingPeriodEndDate(o)
-  if (end && calendarDaysDiff(today, end) <= 0) return true
-
-  if (isSpreadCheckpointDay(o, today)) return true
-
-  if (isSpreadBehindLinearPace(o, completed, today) && elapsed % k === 0) return true
-
-  return false
-}
-
-function getImpossibleMessage(o: Objective, completed: number, today: string): string | null {
-  if (o.type !== 'repeating' || !o.recurrenceDays || !o.periodStart) return null
-  const start = new Date(o.periodStart)
-  const now = new Date(today)
-  const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / 86_400_000)
-  const daysLeft = o.recurrenceDays - daysSinceStart
-  const remaining = o.targetCompletions - completed
-  if (daysLeft > 0 && daysLeft < remaining) {
-    return `⚠️ Impossible to complete: ${remaining} left but only ${daysLeft} day(s) remaining!`
-  }
-  return null
-}
-
-function reminderEligible(o: Objective, completed: number, today: string): boolean {
-  if (o.archived || completed >= o.targetCompletions) return false
-  if (o.type === 'one-time' || (o.type === 'repeating' && o.reminderMode === 'end')) {
-    return shouldNotifyOneTimeOrEnd(o, completed, today)
-  }
-  if (o.type === 'repeating' && o.reminderMode === 'spread') {
-    return shouldNotifySpread(o, completed, today)
-  }
-  return false
-}
-
-function recordReminderSent(objectiveId: string, today: string) {
-  const prev = store.get('objectiveReminderLastSent') ?? {}
-  store.set('objectiveReminderLastSent', { ...prev, [objectiveId]: today })
-}
-
-function alreadySentToday(objectiveId: string, today: string): boolean {
-  const m = store.get('objectiveReminderLastSent') ?? {}
-  return m[objectiveId] === today
+  return [
+    ...items.slice(0, 2).map(i => `• ${trim(i.title)} (${i.completed}/${i.target})`),
+    `+${items.length - 2} more`,
+  ].join('\n')
 }
 
 // ─── Reminder notifications ────────────────────────────────────────────────────
-// Called every minute from main.ts — at most one notification per objective per calendar day.
+// The toast fires at most once per calendar day; the popup payload refreshes every call.
 
-export function checkObjectiveReminders() {
+/** Drop a stored payload so a stale reminder can't surface on the next open. Returns null for callers. */
+function clearPendingReminder(): null {
+  if (store.get('pendingObjectiveReminder') !== null) store.set('pendingObjectiveReminder', null)
+  return null
+}
+
+/**
+ * Scan the objectives, build today's reminder payload, and persist it (plus any shuffle-bag draw).
+ * Null when nothing is due, in which case the stored payload is cleared.
+ *
+ * This is the expensive half: an objectives x logs scan plus the copy. It runs only at the moments
+ * that need it, never on the bare tick. See checkObjectiveReminders (fires it) and
+ * refreshPendingObjectiveReminder (re-runs it when the payload is actually about to be read).
+ */
+function buildAndStoreReminderPayload(settings: Settings, today: string): ObjectiveReminderPayload | null {
+  const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
+  const selections = selectReminderObjectives(objectives, getObjectiveLogs(), today, settings.reminderLeadDays)
+  if (selections.length === 0) return clearPendingReminder()
+
+  const personality = settings.personality
+
+  // Roasts are drawn from a persistent shuffle bag (see roastBag.ts) so lines don't repeat until
+  // the pool is exhausted. Deep-clone so we don't mutate electron-store's cached reference; we
+  // persist below only if the draw actually changed the state.
+  const roastState: RoastBagState = JSON.parse(JSON.stringify(store.get('roastState') ?? emptyRoastBagState()))
+  const roastBefore = JSON.stringify(roastState)
+  const chooseFor = (drawKey: string): PoolChooser =>
+    (poolId, items) => bagPick(roastState, today, drawKey, poolId, items)
+
+  const title = objectiveReminderBatchTitle(selections.length, chooseFor('__batch'), personality)
+
+  const items: ObjectiveReminderItem[] = selections.map(s => ({
+    title: s.objective.title,
+    group: s.objective.group,
+    completed: s.completed,
+    target: s.target,
+    debt: s.debt,
+    // The on-pace cadence nudge gets the softer copy; everything else the behind/deadline roast.
+    roast: s.category === 'nudge'
+      ? objectiveCadenceNudge(s.completed, s.target, chooseFor(s.objective.id), personality)
+      : objectiveReminderBody(s.completed, s.target, s.debt, chooseFor(s.objective.id), personality),
+    // One-time uses its deadline; repeating uses the current period's end date.
+    dueDate: s.objective.type === 'one-time'
+      ? s.objective.dueDate
+      : repeatingPeriodEndDate(s.objective) ?? undefined,
+    severity: s.severity,
+  }))
+  const payload: ObjectiveReminderPayload = { date: today, title, items }
+
+  // The memo keeps the wording stable all day, so a rebuild re-reads it instead of drawing again;
+  // only the very first build of the day actually consumes the bag and needs a write.
+  if (JSON.stringify(roastState) !== roastBefore) store.set('roastState', roastState)
+  if (JSON.stringify(store.get('pendingObjectiveReminder')) !== JSON.stringify(payload)) {
+    store.set('pendingObjectiveReminder', payload)
+  }
+  return payload
+}
+
+/**
+ * Re-derive today's stored payload right before something displays it (cold open, toast click), so
+ * what the user sees reflects current counts rather than the snapshot taken at reminder time.
+ *
+ * This used to happen on every tick for the rest of the day. Nothing reads the payload between
+ * ticks, so that was up to ~900 scans a day to keep a value fresh that only matters at the instant
+ * it is read. Doing it at read time is the same guarantee for two scans a day.
+ */
+export function refreshPendingObjectiveReminder(): ObjectiveReminderPayload | null {
+  const stored = store.get('pendingObjectiveReminder')
   const settings = store.get('settings') as Settings
-  if (settings.notifyObjectiveReminders === false) return
+  const today = calendarDateKey(new Date(), resolveTimeZone(settings.calendarTimeZone))
+  // Only a payload already committed for today is refreshable: with none stored there is nothing
+  // to show yet (rebuilding here would surface a reminder before its time), and a stale-dated one
+  // is filtered by shouldShowReminderPopup anyway.
+  if (!stored || stored.date !== today) return stored ?? null
+  return buildAndStoreReminderPayload(settings, today)
+}
+
+export function checkObjectiveReminders(
+  opts: {
+    onToast?: (t: { title: string; body: string }) => void     // deliver as an overlay card (window closed/busy)
+    onPopupLive?: (payload: ObjectiveReminderPayload) => void  // pop live in an already-open window
+    canPopupLive?: boolean             // window up and not mid-focus-block
+    force?: boolean
+  } = {},
+): ObjectiveReminderPayload | null {
+  syncRepeatingObjectivePeriods()
+  const settings = store.get('settings') as Settings
+  const mode = settings.objectiveReminderMode ?? 'both'
 
   const tz = resolveTimeZone(settings.calendarTimeZone)
   const today = calendarDateKey(new Date(), tz)
-  const log = getCurrentLog()
-  const objectives = store.get('objectives').filter((o: Objective) => !o.archived)
 
-  const pending: { id: string; title: string; body: string }[] = []
+  // Reminders off: nothing to say all day, so don't scan at all.
+  if (mode === 'off') return clearPendingReminder()
 
-  for (const objective of objectives) {
-    const completed = countCompletionsForCurrentPeriod(objective, log.objectiveLogs)
-    if (completed >= objective.targetCompletions) continue
-    if (alreadySentToday(objective.id, today)) continue
+  // The whole once-a-day decision is pure and unit-tested in reminderDispatch, and it runs FIRST:
+  // it needs only the clock and the last-fired date, so the tick can answer "is there anything to
+  // do?" without touching objectives or logs. `hasSelections: true` is safe to assume here because
+  // the false case returns 'clear' unconditionally, which is what a no-selections scan would give.
+  const lastFiredDate = store.get('lastReminderToastDate')
+  const plan = planReminderDelivery({
+    hasSelections: true,
+    mode,
+    lastFiredDate,
+    today,
+    nowHHMM: nowHHMMIn(tz),
+    reminderTime: settings.reminderTime,
+    canPopupLive: Boolean(opts.canPopupLive && opts.onPopupLive),
+    force: opts.force,
+  })
+  if (plan.pending === 'clear') return clearPendingReminder()
 
-    const impossible = getImpossibleMessage(objective, completed, today)
-    if (impossible) {
-      pending.push({ id: objective.id, title: objective.title, body: impossible })
-      continue
-    }
+  // pending is 'set' either because we are firing now or because we already fired today. Only the
+  // first needs work; on the rest of the day's ticks the stored payload is left alone and is
+  // re-derived on read instead (refreshPendingObjectiveReminder).
+  const firingNow = !(lastFiredDate === today) || Boolean(opts.force)
+  if (!firingNow) return store.get('pendingObjectiveReminder')
 
-    if (reminderEligible(objective, completed, today)) {
-      pending.push({
-        id: objective.id,
-        title: objective.title,
-        body: `${completed}/${objective.targetCompletions} completed — don't forget to check in!`,
-      })
-    }
+  const payload = buildAndStoreReminderPayload(settings, today)
+  if (!payload) return null
+
+  if (plan.deliver === 'popup') {
+    opts.onPopupLive!(payload)
+  } else if (plan.deliver === 'toast') {
+    opts.onToast?.({ title: payload.title, body: buildToastBody(payload.items) })
+  }
+  if (plan.markFired) store.set('lastReminderToastDate', today)
+
+  return payload
+}
+
+// ─── Daily summary ─────────────────────────────────────────────────────────────
+// Fires once/day at or after settings.summaryTime (catch-up), mirroring the reminder. Kept here (not
+// main.ts) so the same faked-store + clock tests can drive it. The window-coupled bits are injected:
+// `canPopup` (window up and free) and `onPopupLive` (send SUMMARY_SHOW to the open window).
+
+export function checkDaySummary(opts: {
+  onPopupLive?: (summary: DaySummary) => void
+  onToast?: (t: { title: string; body: string }) => void  // deliver as an overlay card (window closed/busy)
+  canPopup: boolean
+  force?: boolean
+}): DaySummary | null {
+  const settings = store.get('settings') as Settings
+  const tz = resolveTimeZone(settings.calendarTimeZone)
+  const plan = planSummaryDelivery({
+    mode: settings.dailySummaryMode ?? 'both',
+    lastFiredDate: store.get('lastSummaryDate'),
+    today: calendarDateKey(new Date(), tz),
+    nowHHMM: nowHHMMIn(tz),
+    summaryTime: settings.summaryTime,
+    canPopup: opts.canPopup,
+    force: opts.force,
+  })
+  if (!plan.fire) return null
+
+  const objectives = syncRepeatingObjectivePeriods() // roll to the current period before summarizing
+  const summary = buildDaySummary({
+    settings, log: getCurrentLog(), objectiveLogs: getObjectiveLogs(), objectives, now: new Date(),
+  })
+  // Persist (so a cold open still surfaces it) and mark today done, then deliver live.
+  store.set('pendingSummary', summary)
+  store.set('lastSummaryDate', calendarDateKey(new Date(), tz))
+  if (plan.deliver === 'popup') {
+    opts.onPopupLive?.(summary)
+  } else if (plan.deliver === 'toast') {
+    opts.onToast?.({
+      title: dailySummaryNotificationTitle(settings.personality),
+      body: dailySummaryNotificationBody(
+        summary.pomodorosCompleted, summary.totalFocusMinutes, summary.objectiveVerdict,
+        summary.objectiveCheckinsToday, settings.personality,
+      ),
+    })
+  }
+  return summary
+}
+
+// ─── Calendar block alerts ───────────────────────────────────────────────────────
+// Each block carries up to 3 alerts (at the start time, or N minutes/hours/days before). At each
+// alert's moment we fire an OS toast to start a focus block for its objective, but only while that
+// objective is still an active, unmet task. Firing is a single persisted watermark (`lastAlertCheckAt`):
+// an alert fires when its moment falls in (lastCheck, now], which dedups it and gives cold-open catch-up
+// (clamped to 24h so a week-closed app doesn't dump a wall of toasts). The toast works whether the
+// window is open or closed; clicking it starts the block via the widget without raising the main window.
+
+/** Wall-clock "total minutes" for an instant in `tz`: dayIndex*1440 + minuteOfDay. */
+function totalMinutesIn(date: Date, tz: string): number {
+  const { hour, minute } = wallClockHourMinute(date, tz)
+  return dayIndexOf(calendarDateKey(date, tz)) * 1440 + hour * 60 + minute
+}
+
+/** Wall-clock "total minutes" (dayIndex*1440 + minuteOfDay) of a civil date + "HH:MM". */
+function dateTimeTotal(date: string, hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number)
+  return dayIndexOf(date) * 1440 + h * 60 + m
+}
+
+export function checkSchedule(opts: {
+  // A due event alert, handed to the in-app notification overlay (persists until Start or the event
+  // is over). `endTotal` is the occurrence's end in wall-clock total minutes: when it's over.
+  onAlert?: (alert: { id: string; objectiveId: string; title: string; body: string; endTotal: number }) => void
+  force?: boolean
+  /** Where the caller's in-session watermark got to. Omitted falls back to the persisted one (cold
+   *  open, first tick of a session). Deliberately not nullable: "no in-session value" and "nothing
+   *  ever delivered" are different answers, conflating them re-fires a day of alerts on launch. */
+  since?: string
+} = {}): DueAlert[] {
+  const settings = store.get('settings') as Settings
+  const slots = store.get('scheduleSlots')
+  if (!slots || slots.length === 0) return []
+
+  syncRepeatingObjectivePeriods() // roll to current periods so "met" reflects today
+  const objectives = store.get('objectives') as Objective[]
+  const byId = new Map(objectives.map(o => [o.id, o]))
+  const logs = getObjectiveLogs()
+  const tz = resolveTimeZone(settings.calendarTimeZone)
+  const today = calendarDateKey(new Date(), tz)
+
+  const isActiveAndUnmet = (objectiveId: string): boolean => {
+    const o = byId.get(objectiveId)
+    if (!o || o.archived) return false
+    const completed = logs.filter(l => l.objectiveId === o.id && l.periodStart === (o.periodStart ?? today)).length
+    return !isObjectiveMet(o, completed)
   }
 
-  if (pending.length === 0) return
-  if (!Notification.isSupported()) {
-    for (const p of pending) recordReminderSent(p.id, today)
-    return
-  }
+  const now = new Date()
+  const nowTotal = totalMinutesIn(now, tz)
+  const lastAt = opts.since ?? store.get('lastAlertCheckAt')
+  // Catch up at most the last 24h (so a week-closed app, or a first-ever run, doesn't dump a wall
+  // of stale toasts, while opening the app a few hours late still fires today's due alerts).
+  const floor = nowTotal - 1440
+  const lastCheckTotal = lastAt ? Math.max(totalMinutesIn(new Date(lastAt), tz), floor) : floor
+  // Horizon wide enough for the furthest "before" alert (1 week) plus a little catch-up slack.
+  const horizonFrom = addCalendarDays(today, -2)
+  const horizonTo = addCalendarDays(today, 9)
 
-  let body = pending.map(p => `• ${p.title}: ${p.body}`).join('\n')
-  if (body.length > 480) body = `${body.slice(0, 477)}…`
-  new Notification({
-    title: `🍅 TubeMato — ${pending.length} objective reminder${pending.length === 1 ? '' : 's'}`,
-    body,
-  }).show()
-  for (const p of pending) recordReminderSent(p.id, today)
+  const due = selectDueAlerts({ slots, horizonFrom, horizonTo, nowTotal, lastCheckTotal, isActiveAndUnmet, force: opts.force })
+
+  for (const { slot, offsetMinutes, date, startTime, endTime } of due) {
+    const o = byId.get(slot.objectiveId)!
+    const body = scheduleAlertBody(offsetMinutes, startTime, `${slot.id}-${startTime}`, settings.personality)
+    // Delivered as a persistent event card in the in-app overlay (see showAppNotification in main.ts).
+    // Immune to OS toast rejection / Focus Assist; stays until Start is clicked or the event is over.
+    opts.onAlert?.({
+      id: `sched-${slot.id}-${date}-${startTime}-${offsetMinutes}`,
+      objectiveId: slot.objectiveId,
+      title: o.title,
+      body,
+      endTotal: dateTimeTotal(date, endTime),
+    })
+  }
+  // Persisted only when an alert actually fires; between fires the caller holds the watermark in
+  // memory (`since`), since the on-disk copy is only read once per launch, not worth a rewrite per
+  // tick. A clean quit flushes the in-memory value too (main.ts).
+  if (due.length > 0) store.set('lastAlertCheckAt', now.toISOString())
+  return due
 }

@@ -1,0 +1,21 @@
+.twg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Each field grows from 0 up to its own content width (max-content) or its fair half, whichever is
+   smaller. So a field shorter than half stays whole and frees its slack to the other; when both
+   exceed half, they split and both truncate. min-width:0 lets the truncating one ellipsis. */
+.twg__title,
+.twg__group {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: max-content;
+}
+.twg__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

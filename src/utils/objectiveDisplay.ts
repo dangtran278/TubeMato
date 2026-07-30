@@ -1,28 +1,69 @@
 import type { Objective, PomodoroSessionRecord } from '@electron/types'
+import {
+  addCalendarDays,
+  calendarDaysDiff,
+  effectiveTargetCompletions,
+  hasOutstandingDebt,
+  isObjectiveMet,
+  objectiveDebt,
+  objectivePrepaid,
+  repeatingPeriodEndDate,
+} from '@electron/objectiveDebt'
+import { occurrencesInRange } from '@electron/recurrence'
+import { isSpreadBehindLinearPace } from '@electron/spreadReminder'
+import { objectiveStatus } from '@electron/objectiveSummary'
 
-/** Signed calendar-day difference: `to` minus `from` (UTC noon). */
-export function calendarDaysDiff(fromIso: string, toIso: string): number {
-  const a = new Date(fromIso + 'T12:00:00.000Z').getTime()
-  const b = new Date(toIso + 'T12:00:00.000Z').getTime()
-  return Math.round((b - a) / 86_400_000)
+export {
+  addCalendarDays,
+  calendarDaysDiff,
+  effectiveTargetCompletions,
+  isObjectiveMet,
+  objectiveDebt,
+  objectivePrepaid,
+  repeatingPeriodEndDate,
 }
 
-export function addCalendarDays(isoDate: string, days: number): string {
-  const d = new Date(isoDate + 'T12:00:00.000Z')
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
+/** Short human label for a repeating objective's cadence (card badge). Phase 1: daily + weekly;
+ *  monthly/yearly get a refined label in phase 2. */
+export function recurrenceSummary(o: Objective): string {
+  const r = o.recurrence
+  if (!r) return ''
+  // Just the cadence, no weekday/day-specific suffix, so every frequency reads consistently.
+  switch (r.frequency) {
+    case 'daily':
+      return r.interval === 1 ? 'Daily' : `Every ${r.interval}d`
+    case 'weekly':
+      return r.interval === 1 ? 'Weekly' : `Every ${r.interval}w`
+    case 'monthly':
+      return r.interval === 1 ? 'Monthly' : `Every ${r.interval}mo`
+    case 'yearly':
+      return r.interval === 1 ? 'Yearly' : `Every ${r.interval}yr`
+    default:
+      return r.frequency
+  }
 }
 
-/** Inclusive last calendar day of the recurring period (deadline for sorting / overdue). */
-export function repeatingPeriodEndDate(o: Objective): string | null {
-  if (o.type !== 'repeating' || !o.periodStart || !o.recurrenceDays) return null
-  return addCalendarDays(o.periodStart, o.recurrenceDays - 1)
+/**
+ * Objective due dates (occurrences) that fall in the inclusive civil-date range [from, to]: what the
+ * Calendar overlays on each day. One-time → its single dueDate if in range. Repeating → projects the
+ * current period's due forward via the recurrence rule, collecting each period end in range, stopping
+ * at the End date. Projection starts at the current period, so past-week occurrences (before the
+ * current periodStart) aren't reconstructed; the Calendar shows current + upcoming occurrences.
+ */
+export function objectiveOccurrencesInRange(o: Objective, from: string, to: string): string[] {
+  if (o.type === 'one-time') {
+    return o.dueDate && o.dueDate >= from && o.dueDate <= to ? [o.dueDate] : []
+  }
+  if (o.type !== 'repeating' || !o.recurrence || !o.periodStart) return []
+  const start = repeatingPeriodEndDate(o) // the current period's end; enumeration steps from here
+  if (!start) return []
+  return occurrencesInRange(o.recurrence, o.recurrenceAnchor ?? o.periodStart, start, from, to, o.dueDate || undefined)
 }
 
 /** Exclusive day after the period (for aggregating sessions in [periodStart, endExclusive)). */
 function repeatingPeriodEndExclusive(o: Objective): string | null {
-  if (o.type !== 'repeating' || !o.periodStart || !o.recurrenceDays) return null
-  return addCalendarDays(o.periodStart, o.recurrenceDays)
+  const end = repeatingPeriodEndDate(o)
+  return end ? addCalendarDays(end, 1) : null
 }
 
 /** Sort key: real deadline (one-time due date or repeating period end), not spread reminder days. */
@@ -36,34 +77,67 @@ export function objectiveHasCustomTimer(o: Objective): boolean {
   return (
     typeof o.workDuration === 'number' ||
     typeof o.shortBreakDuration === 'number' ||
-    typeof o.longBreakDuration === 'number'
+    typeof o.longBreakDuration === 'number' ||
+    typeof o.pomodorosBeforeLongBreak === 'number'
   )
 }
 
-export function sortActiveObjectives(list: Objective[]): Objective[] {
+/**
+ * The board's single status taxonomy, most urgent → least, used for BOTH ordering and the card's
+ * tint/badge so the two can never disagree. Precedence (checked in this order):
+ *   done     : met its effective target; sinks to the bottom regardless of dates.
+ *   overdue  : one-time past its due date, unmet.
+ *   debt     : repeating still carrying debt this period's check-ins haven't covered (live, not the
+ *              frozen field). Once covered it falls through to behind / on-track.
+ *   behind   : a deadline reached unmet, or a spread objective under its linear pace.
+ *   on-track : none of the above; still open with no pressure.
+ */
+export type ObjectiveBoardStatus = 'overdue' | 'debt' | 'behind' | 'on-track' | 'done'
+
+const BOARD_STATUS_RANK: Record<ObjectiveBoardStatus, number> = {
+  overdue: 0, debt: 1, behind: 2, 'on-track': 3, done: 4,
+}
+
+export function objectiveBoardStatus(o: Objective, completions: number, today: string): ObjectiveBoardStatus {
+  if (isObjectiveMet(o, completions)) return 'done'
+  if (o.type === 'one-time' && o.dueDate && today > o.dueDate) return 'overdue'
+  if (o.type === 'repeating' && hasOutstandingDebt(o, completions)) return 'debt'
+  if (objectiveStatus(o, completions, today) === 'behind') return 'behind'
+  return 'on-track'
+}
+
+/**
+ * Order: by board-status tier (overdue → debt → behind → on-track → done), then soonest/most-overdue
+ * deadline within a tier, then id so equal rows never shuffle between renders.
+ */
+export function sortActiveObjectives(
+  list: Objective[],
+  completionsOf: (o: Objective) => number,
+  today: string,
+): Objective[] {
   return [...list].sort((a, b) => {
-    const rank = (x: Objective) => (x.type === 'one-time' ? 0 : 1)
-    if (rank(a) !== rank(b)) return rank(a) - rank(b)
-    return objectiveDeadlineSortKey(a).localeCompare(objectiveDeadlineSortKey(b))
+    const rankDiff = BOARD_STATUS_RANK[objectiveBoardStatus(a, completionsOf(a), today)]
+      - BOARD_STATUS_RANK[objectiveBoardStatus(b, completionsOf(b), today)]
+    if (rankDiff !== 0) return rankDiff
+    const dk = objectiveDeadlineSortKey(a).localeCompare(objectiveDeadlineSortKey(b))
+    return dk !== 0 ? dk : a.id.localeCompare(b.id)
   })
 }
 
+// The coarser background tint: only the two hard-fault statuses get a color; everything else is calm.
 export type ObjectiveCardTone = 'normal' | 'one-time-overdue' | 'repeating-missed'
 
 export function objectiveCardTone(o: Objective, completions: number, today: string): ObjectiveCardTone {
-  const met = completions >= o.targetCompletions
-  if (met) return 'normal'
-  if (o.type === 'one-time' && o.dueDate && today > o.dueDate) return 'one-time-overdue'
-  if (o.type === 'repeating') {
-    const end = repeatingPeriodEndDate(o)
-    if (end && today > end) return 'repeating-missed'
-  }
+  const status = objectiveBoardStatus(o, completions, today)
+  if (status === 'overdue') return 'one-time-overdue'
+  if (status === 'debt') return 'repeating-missed'
   return 'normal'
 }
 
 /**
- * Focus time from completed work sessions only (not breaks / grace / overdue).
- * Each session's `durationMinutes` is active time in the `running` state (pause excluded).
+ * Focus minutes from work sessions attributed to this objective (not breaks / grace / overdue).
+ * Each session's `durationSeconds` is active `running` time (pause excluded); mid-block segments
+ * from objective switches are included (they're real focus), summed in seconds and rounded once.
  * One-time: all history. Repeating: current period only ([periodStart, periodEndExclusive)).
  */
 export function sumFocusMinutesForObjective(
@@ -72,16 +146,33 @@ export function sumFocusMinutesForObjective(
 ): number {
   const id = objective.id
   if (objective.type === 'one-time') {
-    return allSessions
+    const secs = allSessions
       .filter(s => s.objectiveId === id)
-      .reduce((a, s) => a + s.durationMinutes, 0)
+      .reduce((a, s) => a + s.durationSeconds, 0)
+    return Math.round(secs / 60)
   }
   const ps = objective.periodStart
   const endEx = repeatingPeriodEndExclusive(objective)
   if (!ps || !endEx) return 0
-  return allSessions
+  const secs = allSessions
     .filter(s => s.objectiveId === id && s.date >= ps && s.date < endEx)
-    .reduce((a, s) => a + s.durationMinutes, 0)
+    .reduce((a, s) => a + s.durationSeconds, 0)
+  return Math.round(secs / 60)
+}
+
+// ─── Objective card badge labels ─────────────────────────────────────────────
+// Static, factual strings, no personality, not for notifications.
+
+export function badgeOverdue(): string {
+  return `⚠ Past due date`
+}
+
+export function badgeDebt(debt: number): string {
+  return `↩ +${debt} owed`
+}
+
+export function badgeBehind(): string {
+  return `⌛︎ Behind pace`
 }
 
 export function formatFocusMinutes(mins: number): string {
@@ -92,52 +183,24 @@ export function formatFocusMinutes(mins: number): string {
   return m ? `${h}h ${m}m focus` : `${h}h focus`
 }
 
-// ─── Type/deadline badge: grey vs orange (urgent) ─────────────────────────────
-
-function daysElapsedInPeriod(periodStart: string, today: string): number {
-  return calendarDaysDiff(periodStart, today)
-}
-
-/** Matches scheduler spread checkpoints (same math as electron/scheduler). */
-function isSpreadCheckpointDay(o: Objective, today: string): boolean {
-  if (o.reminderMode !== 'spread' || !o.periodStart || !o.recurrenceDays) return false
-  const daysSinceStart = daysElapsedInPeriod(o.periodStart, today)
-  const period = o.recurrenceDays
-  const interval = Math.floor(period / o.targetCompletions)
-  return interval > 0 && daysSinceStart > 0 && daysSinceStart % interval === 0
-}
-
-/**
- * Linear pace: by day `elapsed`, expect at least floor(need * elapsed / D) check-ins
- * (e.g. 2 in 7 days → orange after ~4 days if still 0).
- */
-function isSpreadBehindLinearPace(o: Objective, completed: number, today: string): boolean {
-  if (o.reminderMode !== 'spread' || !o.periodStart || !o.recurrenceDays) return false
-  const D = o.recurrenceDays
-  const need = o.targetCompletions
-  if (D <= 0 || need <= 0) return false
-  const elapsed = daysElapsedInPeriod(o.periodStart, today)
-  if (elapsed <= 0) return false
-  const minExpected = Math.floor((need * elapsed) / D)
-  return completed < minExpected
-}
+// ─── Type/deadline badge: gray vs orange (urgent) ─────────────────────────────
 
 /** Last day of period (or later in window) and still short of target. */
 function isSpreadEndWindowPressure(o: Objective, completed: number, today: string): boolean {
   if (o.reminderMode !== 'spread') return false
   const end = repeatingPeriodEndDate(o)
-  if (!end || completed >= o.targetCompletions) return false
+  if (!end || isObjectiveMet(o, completed)) return false
   return calendarDaysDiff(today, end) <= 0
 }
 
 /**
- * Orange deadline badge when attention is needed; grey when calm.
+ * Orange deadline badge when attention is needed; gray when calm.
  * - One-time or repeating + end: orange if ≤3 calendar days until period/due end (not met).
- * - Repeating + spread: orange on checkpoint days, when behind linear pace, or last-day pressure.
+ * - Repeating + spread: orange when behind linear pace or under last-day pressure (pace-aware:
+ *   a plain checkpoint day while on pace stays calm, matching the reminder logic).
  */
 export function isDeadlineMetaUrgent(o: Objective, completed: number, today: string): boolean {
-  const met = completed >= o.targetCompletions
-  if (met) return false
+  if (isObjectiveMet(o, completed)) return false
 
   if (o.type === 'one-time') {
     if (!o.dueDate) return false
@@ -152,7 +215,6 @@ export function isDeadlineMetaUrgent(o: Objective, completed: number, today: str
 
   if (o.type === 'repeating' && o.reminderMode === 'spread') {
     return (
-      isSpreadCheckpointDay(o, today) ||
       isSpreadBehindLinearPace(o, completed, today) ||
       isSpreadEndWindowPressure(o, completed, today)
     )

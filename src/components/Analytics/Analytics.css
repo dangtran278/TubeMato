@@ -21,7 +21,9 @@
 .stat-card__value {
   font-size: 32px;
   font-weight: 700;
-  font-family: var(--font-mono);
+  /* tabular-nums keeps digits evenly spaced without a full monospace cell, which would leave a
+     decimal point floating with wide gaps (e.g. "3 . 9h"). */
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   line-height: 1.1;
 }
@@ -36,6 +38,17 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* Week-over-week focus delta. Up is affirming (green); down/flat stay muted rather than alarming red;
+   an off week shouldn't scold. The ▲/▼ glyph carries direction too, so it never relies on color alone. */
+.stat-card__delta {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.stat-card__delta--up { color: var(--success); }
+.stat-card__delta--down,
+.stat-card__delta--flat { color: var(--text-muted); }
 
 .analytics-view-header {
   display: flex;
@@ -77,11 +90,17 @@
   }
 }
 
-/* Centered above cursor — native `title` sits under the pointer and is hard to read */
+/* Floating above the cursor; native `title` sits under the pointer and is hard to read */
 .analytics-floating-tip {
+  /* Anchored at 0,0; a layout effect writes transform: translate(X, Y) with the
+     final viewport-clamped top-left corner (centering + edge clamping done in JS,
+     since CSS can't know the box width). transform is GPU-composited. */
   position: fixed;
+  left: 0;
+  top: 0;
   z-index: 10000;
-  max-width: min(96vw, 640px);
+  max-width: min(90vw, 320px);
+  width: max-content;
   padding: 8px 14px;
   font-size: 12px;
   line-height: 1.35;
@@ -89,11 +108,11 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
   pointer-events: none;
-  transform: translate(-50%, calc(-100% - 10px));
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ─── Contribution calendar (GitHub-style) ─────────────────────────────────── */
@@ -103,8 +122,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  --contrib-empty-bg: #161b22;
-  --contrib-empty-border: rgba(255, 255, 255, 0.06);
+  /* --contrib-empty-bg / --contrib-empty-border come from the theme tokens (index.css). */
   --contrib-1: rgba(224, 90, 58, 0.18);
   --contrib-2: rgba(224, 90, 58, 0.38);
   --contrib-3: rgba(224, 90, 58, 0.58);
@@ -127,9 +145,9 @@
 }
 
 .contrib__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .contrib__hint {
@@ -183,16 +201,15 @@
   color: var(--text-secondary);
   line-height: 1;
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
   box-sizing: border-box;
 }
 
 .contrib__matrix {
   display: grid;
-  grid-template-columns: 32px repeat(var(--contrib-cols, 1), 11px);
-  grid-template-rows: repeat(7, 11px);
+  grid-template-columns: 32px repeat(var(--contrib-cols, 1), var(--contrib-cell, 11px));
+  grid-template-rows: repeat(7, var(--contrib-cell, 11px));
   column-gap: 3px;
   row-gap: 3px;
   align-items: center;
@@ -200,9 +217,9 @@
 }
 
 .contrib__dow-label--grid {
-  height: 11px;
+  height: var(--contrib-cell, 11px);
   font-size: 9px;
-  line-height: 11px;
+  line-height: var(--contrib-cell, 11px);
   color: var(--text-muted);
   opacity: 0;
   text-align: right;
@@ -214,8 +231,8 @@
 }
 
 .contrib__cell {
-  width: 11px;
-  height: 11px;
+  width: var(--contrib-cell, 11px);
+  height: var(--contrib-cell, 11px);
   border-radius: 2px;
   box-sizing: border-box;
 }
@@ -289,26 +306,46 @@
   margin-bottom: var(--sp-4);
 }
 
+/* Plot = a left y-axis (value labels) + a bars area with horizontal gridlines behind the bars, so
+   magnitude reads at a glance. Bars scale to the axis max, so their heights line up with the labels. */
+.bar-chart__plot { display: flex; gap: 6px; }
+
+.bar-chart__yaxis { position: relative; flex: 0 0 30px; height: 120px; }
+.bar-chart__ytick {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);   /* center the label on its gridline */
+  font-size: 9px;
+  line-height: 1;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.bar-chart__area { position: relative; flex: 1 1 0; min-width: 0; height: 120px; }
+.bar-chart__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--border);
+  pointer-events: none;
+}
 .bar-chart__bars {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  height: 120px;
-  min-width: 0;
-  width: 100%;
 }
-
 .bar-chart__bar-wrap {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   height: 100%;
-  justify-content: flex-end;
-  gap: 4px;
+  display: flex;
+  align-items: flex-end;
 }
-
 .bar-chart__fill {
   width: 100%;
   border-radius: var(--r-sm) var(--r-sm) 0 0;
@@ -316,51 +353,151 @@
   transition: height var(--dur-slow) var(--ease);
   opacity: 0.85;
 }
+.bar-chart__bar-wrap--today .bar-chart__fill { opacity: 1; }
 
-.bar-chart__tick {
+/* Recessive mean line + a small label on a surface chip so it stays readable over the bars. */
+.bar-chart__baseline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--text-muted);
+  z-index: 2;
+  pointer-events: none;
+}
+.bar-chart__baseline-label {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  padding: 0 3px;
+  font-size: 8px;
+  color: var(--text-secondary);
+  /* Semi-transparent so bars behind the label stay visible. */
+  background: color-mix(in srgb, var(--bg-surface) 62%, transparent);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.bar-chart__xaxis {
+  display: flex;
+  gap: 4px;
+  padding-left: 36px;   /* yaxis width (30) + plot gap (6): aligns labels under their bars */
+  margin-top: 4px;
+}
+.bar-chart__xtick {
+  flex: 1 1 0;
+  min-width: 0;
   font-size: 8px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  max-width: 100%;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
+}
+.bar-chart__xtick--today { color: var(--text-primary); font-weight: 700; }
+
+/* ─── Biological prime time (focus by hour of day) ───────────────────────────── */
+.prime-time {
+  margin-top: var(--sp-4);
+  /* It now sits ABOVE the contribution calendar, so it needs its own bottom spacing too. */
+  margin-bottom: var(--sp-6);
+}
+.prime-time__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.prime-time__header .bar-chart__label {
+  margin-bottom: 0;
+}
+/* Small two-option toggle: All days / Weekdays. */
+.prime-time__modes {
+  display: inline-flex;
+  background: var(--bg-inset, var(--bg-surface));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 2px;
+  gap: 2px;
+  flex: none;
+}
+.prime-time__mode {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.prime-time__mode--on {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+.prime-time__summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  /* Extra room so a tall peak bar's value label (which sits above the bar) never crowds this text. */
+  margin-bottom: var(--sp-6);
+}
+.prime-time__summary strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.prime-time__basis {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+/* 24 bars → tighter gap. Single-series magnitude: one hue, non-peak recessive so the tallest (peak)
+   hour reads on its own; the peak also gets full weight + a glow, and the summary names it in text. */
+.prime-time .bar-chart__bars {
+  gap: 2px;
+}
+.prime-time__fill {
+  background: var(--accent);
+  opacity: 0.3;
+}
+.prime-time__bar--peak .prime-time__fill {
+  opacity: 1;
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+/* Direct magnitude label above the peak bar (positioned by inline bottom%). */
+.prime-time__peak-label {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, calc(-100% - 2px));
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ─── Summary modal ──────────────────────────────────────────────────────────── */
-.modal__title-tz {
-  font-weight: 500;
-  font-size: 0.82em;
-  color: var(--text-muted);
-}
-
-.summary-day-note {
-  margin: 0 0 var(--sp-2);
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.35;
-}
-
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: repeat(2, 1fr);
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   align-items: stretch;
 }
 
 .summary-stat {
   background: var(--bg-base);
   border-radius: var(--r-md);
-  padding: var(--sp-3);
+  padding: var(--sp-3) var(--sp-2);
   text-align: center;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  min-height: 88px;
+  min-height: 76px;
 }
 
 .summary-stat__val {
@@ -374,7 +511,7 @@
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.25;
-  min-height: 2.5em;
+  min-height: 1.25em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -389,6 +526,88 @@
   padding: var(--sp-2) 0;
 }
 
+.summary-mascot {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto var(--sp-3);
+  filter: drop-shadow(0 0 12px var(--accent-glow));
+  opacity: 0.85;
+}
+
+/* ─── Zero-day "screenshot" gag ──────────────────────────────────────────────── */
+/* Camera flash: a single white wash over the whole window when a do-nothing recap
+   opens, then it clears and the tomato-with-camera + polaroid stays on screen. */
+.summary-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6000;
+  /* Delayed so the recap registers first, then the camera "snaps". `both` keeps it
+     invisible (0% keyframe) during the delay. */
+  animation: camera-flash 0.6s ease-out 0.9s both;
+}
+
+@keyframes camera-flash {
+  0%   { opacity: 0; }
+  12%  { opacity: 0.92; }
+  100% { opacity: 0; }
+}
+
+.summary-screenshot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-4);
+  /* Pops in right as the flash whites out (just after its 0.9s delay), so the
+     tomato + polaroid are "revealed" by the flash. */
+  animation: screenshot-pop 0.4s var(--ease) 1s both;
+}
+
+@keyframes screenshot-pop {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.summary-screenshot__tomato {
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+
+.summary-screenshot__tomato img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px var(--accent-glow));
+}
+
+/* Camera sits at the tomato's lower edge so it reads as held. */
+.summary-screenshot__camera {
+  position: absolute;
+  right: -6px;
+  bottom: 2px;
+  font-size: 28px;
+  transform: rotate(-12deg);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Polaroid/receipt: a tilted little card stating plainly that you've been filed. */
+.summary-screenshot__polaroid {
+  background: #f4f1ea;
+  color: #1a1a1a;
+  font-size: 12px;
+  font-weight: 600;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border-radius: 2px;
+  transform: rotate(-2deg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
 .summary-section-title {
   font-size: 12px;
   font-weight: 600;
@@ -400,8 +619,8 @@
 
 .summary-objective {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: var(--sp-2) var(--sp-3);
   background: var(--bg-base);
   border-radius: var(--r-md);
@@ -413,7 +632,13 @@
   opacity: 0.7;
 }
 
+.summary-objective__marker { flex: 0 0 auto; }
+
+/* TitleWithGroup fills the row and balances title vs group internally. */
+.summary-objective__name { flex: 1 1 auto; min-width: 0; }
+
 .summary-objective__count {
+  flex: 0 0 auto;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);

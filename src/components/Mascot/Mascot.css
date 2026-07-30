@@ -1,0 +1,45 @@
+/* Lets the 💤 sit over the tomato's head without disturbing host centering. */
+.mascot-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.mascot-wrap__zzz {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  animation: mascot-zzz 2.4s var(--ease) infinite;
+  pointer-events: none;
+}
+
+@keyframes mascot-zzz {
+  0%   { opacity: 0;   transform: translateY(2px)  scale(0.85); }
+  35%  { opacity: 1;   transform: translateY(-4px) scale(1); }
+  100% { opacity: 0;   transform: translateY(-10px) scale(1.1); }
+}
+
+/* Passive-aggressive welcome shake, opt-in so calm can use a different entrance. */
+.mascot--jiggle {
+  animation: mascot-jiggle 0.7s var(--ease) forwards;
+}
+
+/* Calm nod. Tips left since the calm tomato faces left. */
+.mascot--nodding {
+  animation: mascot-nod 0.7s var(--ease);
+}
+@keyframes mascot-nod {
+  0%, 100% { transform: rotate(0deg)  translateY(0); }
+  50%      { transform: rotate(-3deg) translateY(3px); }
+}
+
+/* Calm asleep: a gentle, persistent breathing tilt. */
+.mascot--asleep {
+  animation: mascot-breathe 3.4s ease-in-out infinite;
+}
+@keyframes mascot-breathe {
+  0%, 100% { transform: rotate(-5deg) scale(1); }
+  50%      { transform: rotate(-5deg) scale(1.03); }
+}

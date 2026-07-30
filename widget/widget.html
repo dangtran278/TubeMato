@@ -1,16 +1,27 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Set theme before first paint; main process passes ?theme= when loading the widget. -->
+    <script>document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') || 'dark';</script>
+    <script type="module" src="./fonts.ts"></script>
+    <script type="module" src="./audio.ts"></script>
     <title>TubeMato Widget</title>
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; overflow: hidden; background: transparent; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
       body {
-        font-family: 'Inter', system-ui, sans-serif;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      body {
+        font-family: "Inter", system-ui, sans-serif;
         color: #f0f0f5;
         -webkit-font-smoothing: antialiased;
         user-select: none;
@@ -20,37 +31,48 @@
         width: 290px;
         height: 90px;
         background: rgba(15, 15, 19, 0.85);
-        border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 16px;
         backdrop-filter: blur(12px);
         display: flex;
         align-items: center;
         padding: 0 14px;
         gap: 12px;
-        cursor: grab;
-        -webkit-app-region: drag;
+        cursor: default;
+      }
+      .widget.dragging {
+        cursor: grabbing;
       }
 
       .widget__timer {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: "JetBrains Mono", monospace;
         font-size: 28px;
         font-weight: 500;
         letter-spacing: -0.02em;
         color: #f0f0f5;
         min-width: 80px;
         line-height: 1;
-        /* Not draggable: whole .widget is drag; dblclick here opens the app */
-        -webkit-app-region: no-drag;
         cursor: pointer;
       }
 
-      .widget__timer--break         { color: #3aabe0; }
-      .widget__timer--grace         { color: #f87171; animation: flash 0.8s infinite; }
-      .widget__timer--procrastinating { color: #f87171; animation: flash 1.4s infinite; }
-      .widget__timer--idle          { color: #55556a; }
+      .widget__timer--break {
+        color: #3aabe0;
+      }
+      .widget__timer--grace {
+        color: #f87171;
+        animation: flash 0.8s infinite;
+      }
+      .widget__timer--procrastinating {
+        color: #f87171;
+        animation: flash 1.4s infinite;
+      }
+      .widget__timer--idle {
+        color: #55556a;
+      }
 
       .widget__info {
         flex: 1;
+        min-width: 0; /* let this column shrink so dots can never shove the controls off-screen */
         display: flex;
         flex-direction: column;
         gap: 4px;
@@ -63,36 +85,47 @@
         letter-spacing: 0.08em;
         color: #9898b0;
       }
-      .widget__label--warn { color: #f87171; }
+      .widget__label--warn {
+        color: #f87171;
+      }
 
       .widget__dots {
         display: flex;
         gap: 4px;
       }
+      /* Compact "done/total" shown in place of the dots when the interval is too high to fit. */
+      .widget__dots--count {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        font-weight: 600;
+        color: #9898b0;
+        font-variant-numeric: tabular-nums;
+      }
 
       .widget__dot {
-        width: 6px; height: 6px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
       }
       .widget__dot--filled {
         background: #e05a3a;
         border-color: #e05a3a;
-        box-shadow: 0 0 4px rgba(224,90,58,0.5);
+        box-shadow: 0 0 4px rgba(224, 90, 58, 0.5);
       }
 
       .widget__controls {
         display: flex;
         gap: 6px;
-        -webkit-app-region: no-drag;
       }
 
       .widget__btn {
-        width: 30px; height: 30px;
+        width: 30px;
+        height: 30px;
         border-radius: 8px;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         color: #9898b0;
         font-size: 12px;
         line-height: 1;
@@ -110,27 +143,105 @@
         font-size: 13px;
       }
       .widget__btn:hover {
-        background: rgba(255,255,255,0.12);
+        background: rgba(255, 255, 255, 0.12);
         color: #f0f0f5;
       }
       .widget__btn--primary {
-        background: rgba(224,90,58,0.2);
-        border-color: rgba(224,90,58,0.3);
+        background: rgba(224, 90, 58, 0.2);
+        border-color: rgba(224, 90, 58, 0.3);
         color: #e05a3a;
       }
-      .widget__btn--primary:hover { background: rgba(224,90,58,0.35); }
+      .widget__btn--primary:hover {
+        background: rgba(224, 90, 58, 0.35);
+      }
       .widget__btn--warn {
-        background: rgba(248,113,113,0.15);
-        border-color: rgba(248,113,113,0.3);
+        background: rgba(248, 113, 113, 0.15);
+        border-color: rgba(248, 113, 113, 0.3);
         color: #f87171;
       }
-      .widget__btn--warn:hover { background: rgba(248,113,113,0.3); }
+      .widget__btn--warn:hover {
+        background: rgba(248, 113, 113, 0.3);
+      }
 
-      .widget__btn--extend { display: none; }
-      .widget__btn--extend.is-visible { display: flex; }
-      .widget__btn--hidden { display: none !important; }
+      .widget__btn--extend {
+        display: none;
+      }
+      .widget__btn--extend.is-visible {
+        display: flex;
+      }
+      .widget__btn--hidden {
+        display: none !important;
+      }
 
-      @keyframes flash { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+      @keyframes flash {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      /* ── Light theme ── */
+      [data-theme="light"] body {
+        color: #1b1b24;
+      }
+      [data-theme="light"] .widget {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: rgba(0, 0, 0, 0.1);
+      }
+      [data-theme="light"] .widget__timer {
+        color: #1b1b24;
+      }
+      [data-theme="light"] .widget__timer--idle {
+        color: #8a8a9c;
+      }
+      [data-theme="light"] .widget__timer--break {
+        color: #2474a3;
+      }
+      [data-theme="light"] .widget__timer--grace,
+      [data-theme="light"] .widget__timer--procrastinating {
+        color: #dc2626;
+      }
+      [data-theme="light"] .widget__label {
+        color: #5a5a70;
+      }
+      [data-theme="light"] .widget__label--warn {
+        color: #dc2626;
+      }
+      [data-theme="light"] .widget__dot {
+        background: rgba(0, 0, 0, 0.08);
+        border-color: rgba(0, 0, 0, 0.15);
+      }
+      /* The empty-dot rule above outranks .widget__dot--filled (it has the [data-theme]
+         ancestor), so the filled dot needs its own light-mode rule to keep the accent fill. */
+      [data-theme="light"] .widget__dot--filled {
+        background: #e05a3a;
+        border-color: #e05a3a;
+      }
+      [data-theme="light"] .widget__dots--count {
+        color: #5a5a70;
+      }
+      [data-theme="light"] .widget__btn {
+        background: rgba(0, 0, 0, 0.07);
+        border-color: rgba(0, 0, 0, 0.18);
+        color: #3c4150;
+      }
+      [data-theme="light"] .widget__btn:hover {
+        background: rgba(0, 0, 0, 0.13);
+        color: #14161d;
+      }
+      [data-theme="light"] .widget__btn--primary {
+        background: rgba(224, 90, 58, 0.16);
+        border-color: rgba(224, 90, 58, 0.5);
+        color: #c2410c;
+      }
+      [data-theme="light"] .widget__btn--warn {
+        background: rgba(220, 38, 38, 0.14);
+        border-color: rgba(220, 38, 38, 0.5);
+        color: #dc2626;
+      }
     </style>
   </head>
   <body>
@@ -141,121 +252,241 @@
         <div class="widget__dots" id="dots"></div>
       </div>
       <div class="widget__controls">
-        <button class="widget__btn widget__btn--glyph widget__btn--primary" id="btn-play" onclick="handlePlay()">▶</button>
-        <button class="widget__btn widget__btn--glyph" id="btn-skip" onclick="handleSkip()">⏭</button>
-        <button class="widget__btn widget__btn--extend" id="btn-extend" onclick="handleExtend()">+1</button>
+        <button class="widget__btn widget__btn--glyph widget__btn--primary" id="btn-play">▶</button>
+        <button class="widget__btn widget__btn--glyph" id="btn-skip">⏭</button>
+        <button class="widget__btn widget__btn--extend" id="btn-extend">+1</button>
       </div>
     </div>
 
-    <script>
-      const timerEl  = document.getElementById('timer')
-      const labelEl  = document.getElementById('label')
-      const dotsEl   = document.getElementById('dots')
-      const btnPlay  = document.getElementById('btn-play')
-      const btnSkip  = document.getElementById('btn-skip')
-      const btnExtend = document.getElementById('btn-extend')
+    <script type="module">
+      import { formatTime as fmt } from "../src/utils/formatters.ts";
+      const timerEl = document.getElementById("timer");
+      const labelEl = document.getElementById("label");
+      const dotsEl = document.getElementById("dots");
+      const btnPlay = document.getElementById("btn-play");
+      const btnSkip = document.getElementById("btn-skip");
+      const btnExtend = document.getElementById("btn-extend");
 
-      let pomodorosBeforeLongBreak = 4
+      btnPlay.addEventListener("click", () => handlePlay());
+      btnSkip.addEventListener("click", () => handleSkip());
+      btnExtend.addEventListener("click", () => handleExtend());
 
-      window.tubemato.settings.get().then(s => {
-        pomodorosBeforeLongBreak = s.pomodorosBeforeLongBreak
-      })
+      let pomodorosBeforeLongBreak = 4;
+      let bellVol = 0.8;
+      let alertVol = 0.7;
+      let scheduleAlertVol = 1.0;
+      let notifyVol = 1.0;
+      let widgetClickTab = "timer";
+      let personality = "passive-aggressive";
+      let lastSession = null;
+      let prevState = null;
+      // Visual chrome (label/classes/dots/buttons) only changes on a phase or
+      // break-pause transition; this caches the last rendered signature so the
+      // per-second tick skips those DOM writes when nothing visible changed.
+      let prevRenderSig = null;
 
-      window.tubemato.timer.getSession().then(update)
-      window.tubemato.timer.onTick(update)
-
-      function fmt(totalSeconds) {
-        const m = Math.floor(totalSeconds / 60)
-        const s = totalSeconds % 60
-        return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      function applySettings(s) {
+        pomodorosBeforeLongBreak = s.pomodorosBeforeLongBreak;
+        bellVol = (s.bellVolume ?? 80) / 100;
+        alertVol = (s.overdueVolume ?? 70) / 100;
+        scheduleAlertVol = (s.scheduleAlertVolume ?? 100) / 100;
+        notifyVol = (s.notifyVolume ?? 100) / 100;
+        widgetClickTab = s.widgetClickTab ?? "timer";
+        personality = s.personality ?? "passive-aggressive";
       }
+
+      window.tubemato.settings.get().then(applySettings);
+
+      window.tubemato.settings.onChange((s) => {
+        applySettings(s);
+        if (lastSession) update(lastSession);
+      });
+
+      const LABELS = {
+        idle: "Ready",
+        running: "Focus",
+        paused: "Paused",
+        "break-short": "Short Break",
+        "break-long": "Long Break",
+        grace: "Break over!",
+        procrastinating: "Overdue",
+      };
+
+      window.tubemato.timer.getSession().then(update);
+      window.tubemato.timer.onTick(update);
 
       function update(session) {
-        const { state, secondsLeft, sessionCount, graceSecondsLeft, procrastinationSeconds } = session
-        const isBreak = state === 'break-short' || state === 'break-long'
-        const isGrace = state === 'grace'
-        const isProc  = state === 'procrastinating'
+        lastSession = session;
+        const { state, secondsLeft, sessionCount, graceSecondsLeft, procrastinationSeconds } =
+          session;
+        const isBreak = state === "break-short" || state === "break-long";
+        const isGrace = state === "grace";
+        const isProc = state === "procrastinating";
+        const enteredProc = isProc && prevState !== "procrastinating";
 
-        // ── Timer display ──────────────────────────────────────────────────────
+        // ── Mascot overlay (transition-gated) ────────────────────────────────────
+        // Calm personality has no jumpscare, so don't even request it (main also gates this).
+        // hideMascot stays ungated so a mascot already up when the personality flips still clears.
+        if (enteredProc && personality !== "calm") window.tubemato.widget.showMascot();
+        else if (prevState === "procrastinating" && !isProc) window.tubemato.widget.hideMascot();
+        prevState = state;
+
+        // ── Timer display (the only thing that changes every tick) ───────────────
         if (isGrace) {
-          timerEl.textContent = `${graceSecondsLeft}s`
+          timerEl.textContent = fmt(graceSecondsLeft);
         } else if (isProc) {
-          timerEl.textContent = `${fmt(procrastinationSeconds)}`
+          timerEl.textContent = fmt(procrastinationSeconds);
         } else {
-          timerEl.textContent = fmt(secondsLeft)
+          timerEl.textContent = fmt(secondsLeft);
         }
 
-        timerEl.className = 'widget__timer'
-          + (isBreak ? ' widget__timer--break' : '')
-          + (isGrace ? ' widget__timer--grace' : '')
-          + (isProc  ? ' widget__timer--procrastinating' : '')
-          + (state === 'idle' ? ' widget__timer--idle' : '')
+        // ── Chrome that only changes across phase / break-pause / dot transitions ─
+        // Constant second-to-second within a phase, so skip these DOM writes
+        // unless the signature actually changed.
+        // Prefer the session's effective interval (per-objective override, else global); fall back
+        // to the settings value only if an older payload lacks it.
+        const perLong = session.pomodorosBeforeLongBreak ?? pomodorosBeforeLongBreak;
+        const filled = sessionCount % perLong;
+        const renderSig =
+          state +
+          ":" +
+          (session.isBreakPaused ? 1 : 0) +
+          ":" +
+          filled +
+          ":" +
+          perLong;
+        if (renderSig === prevRenderSig) return;
+        prevRenderSig = renderSig;
 
-        // ── Label ──────────────────────────────────────────────────────────────
-        const labels = {
-          idle:          'Ready',
-          running:       'Focus',
-          paused:        'Paused',
-          'break-short': 'Short Break',
-          'break-long':  'Long Break',
-          grace:         'Break over!',
-          procrastinating: 'Overdue',
+        timerEl.className =
+          "widget__timer" +
+          (isBreak ? " widget__timer--break" : "") +
+          (isGrace ? " widget__timer--grace" : "") +
+          (isProc ? " widget__timer--procrastinating" : "") +
+          (state === "idle" ? " widget__timer--idle" : "");
+
+        labelEl.textContent = LABELS[state] ?? state;
+        labelEl.className = "widget__label" + (isProc ? " widget__label--warn" : "");
+
+        // ── Pomodoro dots ────────────────────────────────────────────────────────
+        // Past a handful, individual dots overflow the fixed-width widget (worst during breaks,
+        // when the +1 button also shows), so switch to a compact "done/total" readout instead.
+        dotsEl.innerHTML = "";
+        if (perLong > 4) {
+          dotsEl.classList.add("widget__dots--count");
+          dotsEl.textContent = filled + "/" + perLong;
+        } else {
+          dotsEl.classList.remove("widget__dots--count");
+          for (let i = 0; i < perLong; i++) {
+            const d = document.createElement("div");
+            d.className = "widget__dot" + (i < filled ? " widget__dot--filled" : "");
+            dotsEl.appendChild(d);
+          }
         }
-        labelEl.textContent = labels[state] ?? state
-        labelEl.className = 'widget__label' + (isProc ? ' widget__label--warn' : '')
 
-        // ── Pomodoro dots ──────────────────────────────────────────────────────
-        dotsEl.innerHTML = ''
-        for (let i = 0; i < pomodorosBeforeLongBreak; i++) {
-          const d = document.createElement('div')
-          d.className = 'widget__dot' + (i < sessionCount % pomodorosBeforeLongBreak ? ' widget__dot--filled' : '')
-          dotsEl.appendChild(d)
-        }
-
-        // ── Play button ────────────────────────────────────────────────────────
-        if (state === 'running' || (isBreak && !session.isBreakPaused)) {
-          btnPlay.textContent = '⏸'
-          btnPlay.className = 'widget__btn widget__btn--glyph'
+        // ── Play button ──────────────────────────────────────────────────────────
+        if (state === "running" || (isBreak && !session.isBreakPaused)) {
+          btnPlay.textContent = "⏸";
+          btnPlay.className = "widget__btn widget__btn--glyph";
         } else if (isGrace || isProc) {
           // Highlighted "Start Work" button
-          btnPlay.textContent = '▶'
-          btnPlay.className = 'widget__btn widget__btn--glyph widget__btn--warn'
+          btnPlay.textContent = "▶";
+          btnPlay.className = "widget__btn widget__btn--glyph widget__btn--warn";
         } else {
-          btnPlay.textContent = '▶'
-          btnPlay.className = 'widget__btn widget__btn--glyph widget__btn--primary'
+          btnPlay.textContent = "▶";
+          btnPlay.className = "widget__btn widget__btn--glyph widget__btn--primary";
         }
 
-        // ── Extend / skip (use classes — inline display:flex broke flex centering vs stylesheet) ──
-        btnExtend.classList.toggle('is-visible', isBreak || isGrace || isProc)
-        btnSkip.classList.toggle('widget__btn--hidden', state === 'idle' || isGrace || isProc)
+        // ── Extend / skip (use classes; inline display:flex broke flex centering vs stylesheet) ──
+        // +1 applies in every non-idle state: work (running/paused) extends focus, break/grace/proc extends break.
+        btnExtend.classList.toggle("is-visible", state !== "idle");
+        btnSkip.classList.toggle("widget__btn--hidden", state === "idle" || isGrace || isProc);
       }
+
+      // ── JS drag (replaces -webkit-app-region so right-click fires everywhere) ──
+      let prevScreenX = 0;
+      let prevScreenY = 0;
+      let isDragging = false;
+
+      const widgetEl = document.getElementById("widget");
+
+      widgetEl.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        // Allow normal interaction on controls and the timer click-to-open
+        if (e.target.closest(".widget__controls, .widget__timer")) return;
+        isDragging = true;
+        prevScreenX = e.screenX;
+        prevScreenY = e.screenY;
+        widgetEl.classList.add("dragging");
+        e.preventDefault();
+      });
+
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const dx = e.screenX - prevScreenX;
+        const dy = e.screenY - prevScreenY;
+        if (dx !== 0 || dy !== 0) {
+          window.tubemato.widget.move(dx, dy);
+          prevScreenX = e.screenX;
+          prevScreenY = e.screenY;
+        }
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (!isDragging) return;
+        isDragging = false;
+        widgetEl.classList.remove("dragging");
+      });
+
+      // Right-click anywhere on the widget → main process shows the context menu.
+      // (Works on every region now that drag is JS-based, not -webkit-app-region.)
+      document.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        window.tubemato.widget.showContextMenu();
+      });
 
       function handlePlay() {
-        window.tubemato.timer.getSession().then(s => {
-          if (s.state === 'running' || (s.state.startsWith('break') && !s.isBreakPaused)) {
-            window.tubemato.timer.pause()
-          } else if (s.state === 'paused' || (s.state.startsWith('break') && s.isBreakPaused)) {
-            window.tubemato.timer.resume()
-          } else if (
-            s.state === 'grace'       || s.state === 'procrastinating'
-          ) {
-            // End grace/overdue → start next work session
-            window.tubemato.timer.skip()
-          } else {
-            // idle → start
-            window.tubemato.timer.start()
-          }
-        })
+        const s = lastSession;
+        if (!s) return;
+        if (s.state === "running" || (s.state.startsWith("break") && !s.isBreakPaused)) {
+          window.tubemato.timer.pause();
+        } else if (s.state === "paused" || (s.state.startsWith("break") && s.isBreakPaused)) {
+          window.tubemato.timer.resume();
+        } else if (s.state === "grace" || s.state === "procrastinating") {
+          window.tubemato.timer.skip();
+        } else {
+          window.tubemato.timer.start();
+        }
       }
 
-      function handleSkip()   { window.tubemato.timer.skip() }
-      function handleExtend() { window.tubemato.timer.extendBreak() }
+      function handleSkip() {
+        window.tubemato.timer.skip();
+      }
+      function handleExtend() {
+        const s = lastSession;
+        if (s && (s.state === "running" || s.state === "paused")) {
+          window.tubemato.timer.extendWork();
+        } else {
+          window.tubemato.timer.extendBreak();
+        }
+      }
 
-      timerEl.addEventListener('click', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        window.tubemato.app.showMain()
-      })
+      // ── Bell audio ──────────────────────────────────────────────────────────
+      // Synth functions live in audio.ts (shared with the main app's useAudio).
+      // Volumes come from cached settings so no IPC round-trip is needed on bell.
+      window.tubemato.timer.onBell((type) => {
+        if (type === "work-start" || type === "break-start") window._tmaudio.playBell(bellVol);
+        else if (type === "grace-start") window._tmaudio.playGraceAlert(alertVol);
+        else if (type === "overdue-start") window._tmaudio.playOverdueAlert(alertVol);
+        else if (type === "schedule-alert") window._tmaudio.playScheduleAlert(scheduleAlertVol);
+        else if (type === "notify-alert") window._tmaudio.playNotifyAlert(notifyVol);
+      });
+
+      timerEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.tubemato.app.showMainAt(widgetClickTab);
+      });
     </script>
   </body>
 </html>

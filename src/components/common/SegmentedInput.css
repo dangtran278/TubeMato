@@ -1,0 +1,20 @@
+.seg {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.seg__cell { display: inline-flex; align-items: center; }
+
+.seg__part {
+  padding: 0 1px;
+  border-radius: 3px;
+  cursor: text;
+  outline: none;
+  white-space: nowrap;
+}
+.seg__part:focus { background: var(--accent); color: #fff; }
+.seg__part--empty { color: var(--text-muted); }
+
+.seg__sep { color: inherit; padding: 0 1px; }

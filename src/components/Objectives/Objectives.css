@@ -1,8 +1,39 @@
 .objectives-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: var(--sp-4);
   align-items: stretch;
+}
+
+/* Title and controls share the top line; the subtitle spans underneath. It used to sit in a column
+   beside the controls, which left it about half the view and wrapped it after a few words. */
+.objectives-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: var(--sp-4);
+}
+.objectives-header p { grid-column: 1 / -1; }
+
+.objectives-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+}
+/* Filter dropdown, wide enough for longer group names. */
+.objectives-group-filter { width: 260px; }
+.objectives-group-filter .cselect__button { width: 100%; min-width: 0; max-width: none; height: 36px; }
+
+/* New-objective CTA: slightly weightier and roomier than a default .btn. */
+.objectives-new {
+  font-weight: 600;
+  padding: var(--sp-2) var(--sp-5);
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+.objectives-new__plus {
+  margin-left: -2px;
 }
 
 .objectives-empty {
@@ -13,51 +44,406 @@
   font-size: 14px;
 }
 
-/* Objective modal — even columns for type + timer overrides */
+.objectives-empty__mascot {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto var(--sp-4);
+  filter: drop-shadow(0 0 16px var(--accent-glow));
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+/* Scale the 💤 to match the larger 120px mascot (shared default is 1.1rem). */
+.objectives-empty .mascot-wrap__zzz {
+  font-size: 2rem;
+}
+
+/* Escalated empty-state line once the mascot has been poked. */
+.objectives-empty__poke {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+
+/* Type + completions: two-row subgrid (label row + control row), so the 42px
+   segmented and 40px input sit side by side with labels aligned and boxes
+   centered. Safe here because this row is exactly two fixed columns and never wraps. */
 .objective-form__row2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-3);
-  align-items: start;
+  grid-template-rows: auto auto;
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-1);
+  align-items: stretch;
 }
 
+/* Each field spans both rows as a subgrid: label row, then control row.
+   align-items: center centers the shorter input in the row. */
+.objective-form__row2>.objective-form__field {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 2;
+  align-items: center;
+  gap: 0;
+}
+
+/* A single full-width field: spans both columns but keeps the subgrid label/control
+   rows, so its height matches a two-field row (a standalone flex .field would be a
+   few px taller, shifting the modal height when the field appears/disappears). */
+.objective-form__row2--single>.objective-form__field { grid-column: 1 / -1; }
+
+/* Title carries the longer text, so give it more room than Group (which holds short tags). */
+.objective-form__row2--title { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+
+/* Durations (Work / Short / Long) share a three-column row; the wider two-column pair row below
+   holds the longer-labeled fields so their labels sit on one line instead of wrapping. */
 .objective-form__timer-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-3);
   align-items: start;
 }
+.objective-form__timer-row--pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.objective-form__advanced-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  width: fit-content;
+}
+
+.objective-form__advanced-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.objective-form__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
 
 .objective-form__field {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  /* No gap here: label-control spacing comes solely from .form-label's margin-bottom,
+     so a full-width field matches a paired row2 field (which zeroes its own gap
+     and relies on the same margin). A gap here would make standalone fields looser. */
+  gap: 0;
 }
+/* A plain .input is 40px, the .segmented pill is 42px. Center each input in a 42px
+   slot so a field row is the same height whichever control it holds. */
+.objective-form__field .input { margin-block: 1px; }
 
-.objective-form__timer-row .input {
-  width: 100%;
-  box-sizing: border-box;
+/* Description is a textarea so notes can span lines. It opens at the standard 40px input height
+   (single line); the bottom-right grip drags it taller. resize:vertical keeps the form width fixed.
+   .input sets `padding: 0 sp-4`, so add vertical padding to seat the text like a single-line input. */
+.objective-form__desc {
+  display: block;
+  height: 40px;
   min-height: 40px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  line-height: 1.4;
+  resize: vertical;
 }
 
-.objective-form__timer-hint {
-  grid-column: 1 / -1;
-  margin: 0;
+.objective-form__group-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.objective-form__group-row .group-combo { flex: 1; }
+
+/* Free-text group entry: styled to match the app's other dropdowns (see CenterSelect) instead of
+   a native <input list>/<datalist>, whose arrow can't be positioned and which Chrome paints with
+   an unremovable autofill-style background once the value matches a suggestion. */
+.group-combo {
+  position: relative;
+  min-width: 0;
+}
+.group-combo__input {
+  width: 100%;
+  padding-right: 26px; /* room for the arrow */
+}
+.group-combo__arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  margin-top: -2px;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-muted);
+}
+/* Portaled to <body> and fixed-positioned from JS (left/width/top or bottom set inline), so the
+   modal's overflow can't clip it. z-index sits above the modal backdrop (5000). */
+.group-combo__menu {
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: var(--sp-1);
+  background: var(--bg-elevated, var(--bg-overlay));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 10001;
+}
+.group-combo__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: none;
+  border-radius: var(--r-sm, 6px);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.group-combo__option:hover { background: var(--bg-overlay); }
+.group-combo__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Row wrapper when options carry a delete affordance (five-year categories). The delete button
+   stays hidden until the row is hovered so the list reads cleanly. */
+.group-combo__option-row { display: flex; align-items: center; }
+.group-combo__option-row .group-combo__option { flex: 1; min-width: 0; }
+.group-combo__delete {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: var(--sp-1);
+  color: var(--text-muted);
+  background: transparent;
+  border-radius: var(--r-sm, 6px);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.group-combo__option-row:hover .group-combo__delete { opacity: 1; }
+.group-combo__delete:hover { color: var(--danger); }
+
+/* Group-delete confirmation: a small dialog above the objective-form modal (portaled to body). */
+.group-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.group-delete-modal {
+  width: min(34rem, calc(100vw - 2rem));
+  padding: var(--sp-5);
+  background: var(--bg-elevated, var(--bg-overlay));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  box-shadow: var(--shadow-lg);
+}
+.group-delete-modal__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.group-delete-modal__body {
+  margin-top: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.group-delete-modal__actions {
+  margin-top: var(--sp-4);
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.group-delete-modal__actions .btn { white-space: nowrap; }
+/* The three dialog actions share one outline shape that fills in on hover; only the color differs by
+   role: subtle Cancel (ghost), neutral Keep (text color), danger Delete (red). */
+.group-delete-keep {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--text-primary);
+}
+.group-delete-keep:hover { background: var(--text-primary); color: var(--bg-elevated); }
+.group-delete-danger { color: var(--danger); border: 1px solid var(--danger); background: transparent; }
+.group-delete-danger:hover { background: var(--danger); color: #fff; }
+.group-delete-keep:disabled { opacity: 0.45; cursor: not-allowed; }
+.group-delete-keep:disabled:hover { background: transparent; color: var(--text-primary); }
+.group-rename-input { margin-top: var(--sp-3); width: 100%; }
+.group-combo__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.group-combo__empty {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.group-swatch-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.group-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+/* Portaled to <body> and fixed-positioned from JS (right/top or bottom set inline), so the modal's
+   overflow can't clip it. z-index sits above the modal backdrop (5000). */
+.group-swatch-palette {
+  z-index: 10001;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: var(--sp-2);
+  background: var(--bg-elevated, var(--bg-overlay));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.group-swatch-option {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+.group-swatch-option--active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+/* "+" tile: a neutral swatch that opens the in-app color picker (ColorPicker). Drawn from two
+   centered bars (not a text glyph) so it's pixel-centered regardless of font metrics, and sized
+   to the same box-sizing as the color dots so it doesn't read as a smaller circle. */
+.group-swatch-custom {
+  position: relative;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+.group-swatch-custom span { display: none; }
+.group-swatch-custom::before,
+.group-swatch-custom::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: currentColor;
+  border-radius: 1px;
+}
+.group-swatch-custom::before { width: 10px; height: 2px; transform: translate(-50%, -50%); }
+.group-swatch-custom::after { width: 2px; height: 10px; transform: translate(-50%, -50%); }
+
+.group-swatch-palette--picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  grid-template-columns: none;
+}
+.group-picker-back {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.group-picker-back:hover { color: var(--text-primary); }
+
+/* Purely classification, unlike the colored status badges: neutral background/border, with the
+   group's own color carried only by the small dot so it never reads as a warning. */
+
+/* Advanced toggle rows (Music, Carry over): a fixed-width heading so both rows'
+   first item lines up, then "label switch" pairs separated by thin dividers. */
+.objective-form__toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.objective-form__toggle-heading {
+  flex: 0 0 76px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.objective-form__toggle-items {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.objective-form__toggle-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.objective-form__toggle-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
 .objective-form__save-error {
-  grid-column: 1 / -1;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
   font-size: 12px;
+  line-height: 1.35;
   color: var(--danger);
-  margin: 0;
+}
+.modal__footer .btn {
+  flex-shrink: 0;
 }
 
+.form-required {
+  color: var(--danger);
+}
+
+/* A subgrid over three shared rows (header, progress, action) so these line up across every card. */
 .objective-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  position: relative;
+  grid-row: span 3;
+  display: grid;
+  grid-template-rows: subgrid;
+  row-gap: var(--sp-3);
   animation: slideUp var(--dur-slow) var(--ease);
   cursor: pointer;
 }
@@ -67,7 +453,6 @@
   box-shadow: 0 0 0 1px rgba(224, 90, 58, 0.32);
 }
 
-/* Override global .card:hover border for selected objectives */
 .objective-card.objective-card--selected:hover {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(224, 90, 58, 0.32);
@@ -80,95 +465,154 @@
   box-shadow: 0 0 0 1px rgba(224, 90, 58, 0.32);
 }
 
+/* Hoisted into the card's subgrid: their children (header, progress, action) become the shared rows. */
 .objective-card__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: contents;
 }
 
 .objective-card__top {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  flex-shrink: 0;
 }
 
 /* Progress + bottom action stay together and sit at the bottom of the card */
 .objective-card__tail {
-  margin-top: auto;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding-top: var(--sp-3);
+  display: contents;
 }
 
-.objective-card__footer {
-  flex-shrink: 0;
-  display: flex;
-  align-items: flex-end;
+.objective-card--met {
+  border-color: var(--met-border);
 }
 
-.objective-card--met { border-color: rgba(74, 222, 128, 0.2); }
-
-/* Subtle — timer overrides global Settings when this objective is selected */
+/* Subtle: timer overrides global Settings when this objective is selected */
 .badge-timer-override {
   font-size: 10px;
   font-weight: 500;
   padding: 2px 6px;
   color: var(--text-muted);
   background: var(--bg-overlay);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   opacity: 0.92;
 }
 
-/* One-time: deadline passed, not completed — heavy / threatening */
+.badge-debt {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  color: var(--debt-text);
+  background: var(--debt-bg);
+  border: 1px solid var(--debt-border);
+}
+
+.badge-prepaid {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  color: var(--banked-text);
+  background: var(--banked-bg);
+  border: 1px solid var(--banked-border);
+}
+
+/* Softer than the debt badge (no strong border): behind is recoverable, not a hard fault. */
+.badge-behind {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  color: var(--warning);
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.objective-card__count-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.objective-card__count-note--banked {
+  color: var(--banked-text);
+  font-weight: 600;
+}
+
+.progress-bar--split {
+  position: relative;
+}
+
+.progress-bar--split .progress-bar__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 0;
+  transition: width var(--dur-slow) var(--ease);
+}
+
+.progress-bar__fill--debt {
+  background: var(--debt-fill);
+  opacity: 0.85;
+}
+
+/* One-time: deadline passed, not completed. Heavy / threatening */
 .objective-card--tone-overdue {
-  background: linear-gradient(145deg, rgba(69, 10, 10, 0.55), rgba(15, 15, 19, 0.95));
-  border-color: rgba(220, 38, 38, 0.55);
+  background: var(--overdue-bg);
+  border-color: var(--overdue-border);
   box-shadow:
     0 0 0 1px rgba(127, 29, 29, 0.4),
     0 4px 24px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(248, 113, 113, 0.12);
-  animation: objective-overdue-pulse 3.2s ease-in-out infinite;
+  /* Pulse is on a pseudo-element so only opacity is animated (GPU composite,
+     no paint per frame) instead of box-shadow (CPU paint at 60 fps). */
+  overflow: hidden;
 }
+
+.objective-card--tone-overdue::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px rgba(185, 28, 28, 0.65), 0 4px 28px rgba(127, 29, 29, 0.35);
+  opacity: 0;
+  animation: objective-overdue-pulse 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
 .objective-card--tone-overdue .objective-card__title {
-  color: #fecaca;
+  color: var(--overdue-title);
   text-shadow: 0 0 20px rgba(248, 113, 113, 0.25);
 }
 
-/* Repeating: period ended without finishing — distinct warning, not horror */
+/* Repeating: period ended without finishing. Distinct warning, not horror */
 .objective-card--tone-missed-period {
-  background: linear-gradient(145deg, rgba(69, 42, 10, 0.4), rgba(15, 15, 19, 0.92));
-  border-color: rgba(217, 119, 6, 0.45);
+  background: var(--missed-bg);
+  border-color: var(--missed-border);
   box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.25);
 }
+
 .objective-card--tone-missed-period .objective-card__title {
-  color: #fde68a;
+  color: var(--missed-title);
 }
 
 @keyframes objective-overdue-pulse {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(127, 29, 29, 0.4), 0 4px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(248, 113, 113, 0.1); }
-  50% { box-shadow: 0 0 0 1px rgba(185, 28, 28, 0.65), 0 4px 28px rgba(127, 29, 29, 0.35), inset 0 1px 0 rgba(248, 113, 113, 0.18); }
+
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
-.objective-card__focus {
-  font-size: 12px;
+/* Focus time reads as a stat in the meta strip beside "✓ Met", sized like the other badges. */
+.badge-focus {
+  font-size: 10px;
+  font-weight: 600;
   font-family: var(--font-mono);
+  padding: 2px 6px;
   color: var(--success);
-  padding: var(--sp-2) var(--sp-3);
-  background: rgba(74, 222, 128, 0.08);
-  border-radius: var(--r-md);
-  border: 1px solid rgba(74, 222, 128, 0.15);
-  width: 100%;
-  box-sizing: border-box;
-  text-align: center;
-}
-.objective-card--tone-overdue .objective-card__focus,
-.objective-card--tone-missed-period .objective-card__focus {
-  color: #86efac;
-  background: rgba(74, 222, 128, 0.12);
+  background: var(--ok-soft-bg);
+  border: 1px solid var(--ok-soft-border);
 }
 
 .objective-card__header {
@@ -217,7 +661,39 @@
   display: flex;
   gap: var(--sp-1);
   flex-shrink: 0;
+  /* Bleed into the card's corner padding so title/badges reclaim the width. */
+  margin-top: calc(var(--sp-3) / -2);
+  margin-right: calc(var(--sp-3) / -2);
 }
+
+.objective-card__icon--edit,
+.objective-card__icon--del {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.objective-card__icon--edit {
+  font-size: 14px;
+}
+
+.objective-card__icon-glyph {
+  display: inline-block;
+  line-height: 1;
+}
+
+.objective-card__icon--edit .objective-card__icon-glyph {
+  transform: scaleX(-1);
+}
+
+/* Destructive tools go red on hover wherever they appear (see .fycard__tool--del, .cselect__optdelete
+   for the twins). Doubled class so it outranks .btn-icon:hover regardless of stylesheet order. */
+.objective-card__icon--del.objective-card__icon--del:hover { color: var(--danger); }
+/* The trash's ink sits about a unit low in its viewBox (lid at y=4.5, can bottom at 21.5). */
+.objective-card__icon--del .objective-card__icon-glyph { transform: translateY(-1px); }
 
 .objective-card__meta {
   display: flex;
@@ -239,7 +715,9 @@
   gap: var(--sp-3);
 }
 
-.objective-card__progress .progress-bar { flex: 1; }
+.objective-card__progress .progress-bar {
+  flex: 1;
+}
 
 .objective-card__count {
   font-size: 12px;
@@ -254,7 +732,20 @@
   box-sizing: border-box;
 }
 
-/* ─── Form helpers ───────────────────────────────────────────────────────────── */
+/* Sits in the same action-slot as the check-in button (met, nothing left to do). Plain centered
+   text, deliberately unlike a button so it doesn't invite a click. */
+.objective-card__praise {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  padding: 0 var(--sp-2);
+}
+
+/* Form helpers */
 .form-label {
   display: block;
   font-size: 12px;
@@ -262,36 +753,117 @@
   color: var(--text-secondary);
   margin-bottom: var(--sp-1);
 }
+
 .form-hint {
   display: block;
   font-size: 11px;
   color: var(--text-muted);
   margin-top: var(--sp-1);
 }
+
 .form-row {
   display: flex;
   gap: var(--sp-3);
 }
 
-/* ─── Segmented control ──────────────────────────────────────────────────────── */
+/* Segmented control */
 .segmented {
   display: flex;
   background: var(--bg-base);
   border-radius: var(--r-md);
   padding: 3px;
   border: 1px solid var(--border);
+  height: 42px;   /* intentionally 2px taller than .input: a bordered pill reads shorter than a plain input */
+  box-sizing: border-box;
 }
+
 .segmented__btn {
   flex: 1;
   padding: var(--sp-2) var(--sp-3);
   border-radius: calc(var(--r-md) - 2px);
   font-size: 12px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--dur-fast) var(--ease);
+  -webkit-border-radius: calc(var(--r-md) - 2px);
+  -moz-border-radius: calc(var(--r-md) - 2px);
+  -ms-border-radius: calc(var(--r-md) - 2px);
+  -o-border-radius: calc(var(--r-md) - 2px);
 }
+
 .segmented__btn--active {
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
+}
+
+/* Weekday multi-select for weekly recurrence: seven small toggle chips, several may be on at once
+   (unlike the mutually-exclusive .segmented). */
+.objective-form__weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.objective-form__weekday {
+  flex: 1 1 0;
+  min-width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.objective-form__weekday:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.objective-form__weekday--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* The whole repeating block: consistent vertical rhythm matching the modal body's 8px gap. */
+.objective-form__recurrence { display: flex; flex-direction: column; gap: 8px; }
+/* "Repeats every [N] [unit]": a compact number + unit dropdown on one line. */
+.objective-form__every { display: flex; gap: 8px; }
+.objective-form__every input { flex: 0 0 84px; width: 84px; }
+.objective-form__every .cselect { flex: 1; min-width: 0; }
+
+/* CenterSelect inside a form field fills the field (its default width is the wide Timer picker). */
+.objective-form__field .cselect { width: 100%; max-width: none; }
+.objective-form__field .cselect__button { width: 100%; min-width: 0; max-width: none; }
+
+.objective-form__monthdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.objective-form__monthday {
+  height: 24px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+.objective-form__monthday:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.objective-form__monthday--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
 }
