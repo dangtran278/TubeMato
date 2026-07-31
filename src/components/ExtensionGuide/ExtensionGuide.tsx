@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../../store'
 import './ExtensionGuide.css'
 
@@ -28,17 +28,28 @@ export default function ExtensionGuide({ onClose }: { onClose: () => void }) {
     setMsg(r.ok ? 'Opened folder in your file explorer.' : r.error)
   }
 
+  // Each confirmation owns its timer so a second click restarts its own 2s rather than letting the
+  // first click's pending timeout clear the new "Copied!" early.
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyUrlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    if (copyUrlTimerRef.current) clearTimeout(copyUrlTimerRef.current)
+  }, [])
+
   async function copyPath() {
     if (!path) return
     await navigator.clipboard.writeText(path)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    copyTimerRef.current = setTimeout(() => setCopied(false), 2000)
   }
 
   async function copyUrl() {
     await navigator.clipboard.writeText('chrome://extensions')
     setCopiedUrl(true)
-    setTimeout(() => setCopiedUrl(false), 2000)
+    if (copyUrlTimerRef.current) clearTimeout(copyUrlTimerRef.current)
+    copyUrlTimerRef.current = setTimeout(() => setCopiedUrl(false), 2000)
   }
 
   function toggleDontShow(v: boolean) {

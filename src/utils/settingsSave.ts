@@ -1,8 +1,14 @@
 import type { Settings } from '@electron/types'
 
-/** Fields owned by the tray menu / widget drag, not the Settings page. The page's settings copy
- *  goes stale for these the moment the widget moves; excluding them from save avoids reverting that. */
+/** Fields written from outside the Settings page (tray menu, widget drag, extension guide's "don't
+ *  show again"). The page saves a stale mount-time snapshot on every change, so excluding these
+ *  keeps that snapshot from reverting whatever their real owner just set. */
 export function stripTrayManagedFields(s: Settings): Partial<Settings> {
-  const { showMiniWidget: _showMiniWidget, miniWidgetPosition: _miniWidgetPosition, ...rest } = s
+  const {
+    showMiniWidget: _showMiniWidget,
+    miniWidgetPosition: _miniWidgetPosition,
+    hideExtensionGuide: _hideExtensionGuide,
+    ...rest
+  } = s
   return rest
 }

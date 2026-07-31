@@ -74,6 +74,9 @@ export default function SettingsView() {
   // Holds the exact object reference from the initial fetch so we can skip saving it.
   const fetchedRef = useRef<Settings | null>(null)
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The value sitting in the debounce window, or null when nothing is waiting. In a ref so the
+  // unmount-only effect can read it without re-subscribing on every change.
+  const pendingRef = useRef<Settings | null>(null)
 
   const tzOffsetLabel = useMemo(
     () => timeZoneUtcOffsetLabel(new Date(), local.calendarTimeZone ?? 'UTC'),
@@ -99,7 +102,9 @@ export default function SettingsView() {
   useEffect(() => {
     if (!loadedRef.current) return
     if (local === fetchedRef.current) return  // skip the initial fetch, same object reference
+    pendingRef.current = local
     const t = setTimeout(async () => {
+      pendingRef.current = null
       await window.tubemato.settings.set(stripTrayManagedFields(local))
       setSettings(local)
       setSaved(true)
@@ -109,7 +114,16 @@ export default function SettingsView() {
     return () => clearTimeout(t)
   }, [local])
 
-  useEffect(() => () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current) }, [])
+  // Switching tabs (or closing to tray) can unmount mid-debounce; the cleanup above would otherwise
+  // just drop the save silently. Flush the pending value instead. No setSaved: the component is gone.
+  useEffect(() => () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+    const pending = pendingRef.current
+    if (!pending) return
+    pendingRef.current = null
+    void window.tubemato.settings.set(stripTrayManagedFields(pending))
+    setSettings(pending)
+  }, [])
 
   function patch(changes: Partial<Settings>) {
     setLocal(s => ({ ...s, ...changes }))
