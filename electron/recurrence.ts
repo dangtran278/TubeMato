@@ -9,7 +9,7 @@
  * partitioned into contiguous, back-to-back periods (the invariant the debt engine relies on).
  *
  * Supports daily / weekly / monthly / yearly, including monthly & yearly "on the Nth <weekday|day|
- * weekday|weekend day>" (see docs/recurrence-and-calendar-plan.md).
+ * weekday|weekend day>".
  */
 import { addCalendarDays, calendarDaysDiff } from './dateMath'
 import type { RecurrenceRule, NthWeek, NthTarget } from './types'

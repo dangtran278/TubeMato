@@ -11,6 +11,7 @@ export function electronAliases(root: string): Record<string, string> {
     '@electron/dateMath': e('dateMath'),
     '@electron/recurrence': e('recurrence'),
     '@electron/objectiveSummary': e('objectiveSummary'),
+    '@electron/objectiveCounts': e('objectiveCounts'),
     '@electron/daySummary': e('daySummary'),
     '@electron/objectiveReminder': e('objectiveReminder'),
     '@electron/objectiveLogPrune': e('objectiveLogPrune'),

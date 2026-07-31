@@ -4,6 +4,7 @@ import type { Objective, ObjectiveReminderItem, ObjectiveReminderPayload, DaySum
 import { syncRepeatingObjectivePeriods } from './objectiveSync'
 import { buildDaySummary } from './daySummary'
 import { repeatingPeriodEndDate, isObjectiveMet, addCalendarDays } from './objectiveDebt'
+import { indexCompletions, countCompletionsIndexed, type CompletionIndex } from './objectiveCounts'
 import { selectDueAlerts, dayIndexOf, type DueAlert } from './scheduleFire'
 import {
   objectiveReminderBatchTitle,
@@ -18,9 +19,9 @@ import { selectReminderObjectives } from './objectiveReminder'
 import { planReminderDelivery, planSummaryDelivery } from './reminderDispatch'
 import { bagPick, emptyRoastBagState, type RoastBagState } from './roastBag'
 
-/** Current wall-clock time as zero-padded "HH:MM" in the objective calendar's timezone. */
-function nowHHMMIn(tz: string): string {
-  const { hour, minute } = wallClockHourMinute(new Date(), tz)
+/** Wall-clock time of `at` as zero-padded "HH:MM" in the objective calendar's timezone. */
+function nowHHMMIn(tz: string, at: Date): string {
+  const { hour, minute } = wallClockHourMinute(at, tz)
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
@@ -136,7 +137,10 @@ export function checkObjectiveReminders(
   const mode = settings.objectiveReminderMode ?? 'both'
 
   const tz = resolveTimeZone(settings.calendarTimeZone)
-  const today = calendarDateKey(new Date(), tz)
+  // One clock read, shared with nowHHMMIn below: two calls either side of midnight would pair
+  // today's date with tomorrow's "00:00" and skip the day's reminder.
+  const now = new Date()
+  const today = calendarDateKey(now, tz)
 
   // Reminders off: nothing to say all day, so don't scan at all.
   if (mode === 'off') return clearPendingReminder()
@@ -151,7 +155,7 @@ export function checkObjectiveReminders(
     mode,
     lastFiredDate,
     today,
-    nowHHMM: nowHHMMIn(tz),
+    nowHHMM: nowHHMMIn(tz, now),
     reminderTime: settings.reminderTime,
     canPopupLive: Boolean(opts.canPopupLive && opts.onPopupLive),
     force: opts.force,
@@ -190,24 +194,39 @@ export function checkDaySummary(opts: {
 }): DaySummary | null {
   const settings = store.get('settings') as Settings
   const tz = resolveTimeZone(settings.calendarTimeZone)
+  // One clock read for the whole decision: separate `new Date()` calls could straddle midnight
+  // and skip the day entirely.
+  const now = new Date()
+  const today = calendarDateKey(now, tz)
   const plan = planSummaryDelivery({
     mode: settings.dailySummaryMode ?? 'both',
     lastFiredDate: store.get('lastSummaryDate'),
-    today: calendarDateKey(new Date(), tz),
-    nowHHMM: nowHHMMIn(tz),
+    today,
+    nowHHMM: nowHHMMIn(tz, now),
     summaryTime: settings.summaryTime,
     canPopup: opts.canPopup,
     force: opts.force,
   })
   if (!plan.fire) return null
 
-  const objectives = syncRepeatingObjectivePeriods() // roll to the current period before summarizing
-  const summary = buildDaySummary({
-    settings, log: getCurrentLog(), objectiveLogs: getObjectiveLogs(), objectives, now: new Date(),
-  })
-  // Persist (so a cold open still surfaces it) and mark today done, then deliver live.
-  store.set('pendingSummary', summary)
-  store.set('lastSummaryDate', calendarDateKey(new Date(), tz))
+  // Built once, at the moment the summary comes due; a retry tick (window still busy) re-delivers
+  // that same snapshot instead of recomputing, since rebuilding would rewrite the whole store file
+  // every minute. A forced (debug) run writes nothing (see below), so it has nothing to reuse.
+  const stored = opts.force ? null : store.get('pendingSummary') as DaySummary | null
+  const summary = stored && stored.date === today
+    ? stored
+    : buildDaySummary({
+        settings,
+        log: getCurrentLog(),
+        objectiveLogs: getObjectiveLogs(),
+        objectives: syncRepeatingObjectivePeriods(), // roll to the current period before summarizing
+        now,
+      })
+  // Persist so a cold open still surfaces it; mark today done only once it actually reached the user.
+  // A forced preview persists neither: a stored one stamped with today would get reused by the real
+  // delivery at summaryTime, freezing it at the debug button's numbers.
+  if (!opts.force && summary !== stored) store.set('pendingSummary', summary)
+  if (plan.markFired) store.set('lastSummaryDate', today)
   if (plan.deliver === 'popup') {
     opts.onPopupLive?.(summary)
   } else if (plan.deliver === 'toast') {
@@ -256,21 +275,25 @@ export function checkSchedule(opts: {
   const slots = store.get('scheduleSlots')
   if (!slots || slots.length === 0) return []
 
-  syncRepeatingObjectivePeriods() // roll to current periods so "met" reflects today
-  const objectives = store.get('objectives') as Objective[]
+  // Use what the roll returned rather than re-reading it: every `store.get` is a whole-file read +
+  // parse, and this one runs on the 60s tick.
+  const objectives = syncRepeatingObjectivePeriods() // roll to current periods so "met" reflects today
   const byId = new Map(objectives.map(o => [o.id, o]))
-  const logs = getObjectiveLogs()
   const tz = resolveTimeZone(settings.calendarTimeZone)
-  const today = calendarDateKey(new Date(), tz)
+  const now = new Date()
+  const today = calendarDateKey(now, tz)
+
+  // Built on first ask, not per tick: selectDueAlerts only asks when an alert is genuinely firing,
+  // which most 60s ticks it never does, so a quiet tick skips this store read entirely.
+  let counts: CompletionIndex | null = null
 
   const isActiveAndUnmet = (objectiveId: string): boolean => {
     const o = byId.get(objectiveId)
     if (!o || o.archived) return false
-    const completed = logs.filter(l => l.objectiveId === o.id && l.periodStart === (o.periodStart ?? today)).length
-    return !isObjectiveMet(o, completed)
+    counts ??= indexCompletions(getObjectiveLogs())
+    return !isObjectiveMet(o, countCompletionsIndexed(o, counts))
   }
 
-  const now = new Date()
   const nowTotal = totalMinutesIn(now, tz)
   const lastAt = opts.since ?? store.get('lastAlertCheckAt')
   // Catch up at most the last 24h (so a week-closed app, or a first-ever run, doesn't dump a wall
@@ -296,9 +319,9 @@ export function checkSchedule(opts: {
       endTotal: dateTimeTotal(date, endTime),
     })
   }
-  // Persisted only when an alert actually fires; between fires the caller holds the watermark in
-  // memory (`since`), since the on-disk copy is only read once per launch, not worth a rewrite per
-  // tick. A clean quit flushes the in-memory value too (main.ts).
-  if (due.length > 0) store.set('lastAlertCheckAt', now.toISOString())
+  // Persisted only when an alert fires; between fires the caller holds the watermark in memory
+  // (`since`), not worth a rewrite per tick. A forced (debug) run never writes: it fires
+  // unconditionally, so advancing the watermark would skip whatever was genuinely due.
+  if (due.length > 0 && !opts.force) store.set('lastAlertCheckAt', now.toISOString())
   return due
 }

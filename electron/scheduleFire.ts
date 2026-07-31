@@ -85,15 +85,19 @@ export function selectDueAlerts(opts: {
 }): DueAlert[] {
   const out: DueAlert[] = []
   for (const slot of opts.slots) {
-    if (!opts.isActiveAndUnmet(slot.objectiveId)) continue
     const alerts = slotAlerts(slot)
     if (alerts.length === 0) continue
 
     if (opts.force) {
+      if (!opts.isActiveAndUnmet(slot.objectiveId)) continue
       out.push({ slot, offsetMinutes: Math.max(0, Math.min(...alerts)), date: slot.date, startTime: slot.startTime, endTime: slot.endTime })
       continue
     }
 
+    // Gather this slot's fires first and consult isActiveAndUnmet only if there are any: the
+    // predicate is pure so the order doesn't change the result, but the caller has to index the
+    // whole check-in log to answer, and most ticks have nothing due at all.
+    const hits: DueAlert[] = []
     for (const occ of eventOccurrences(slot, opts.horizonFrom, opts.horizonTo)) {
       const occTotal = dayIndexOf(occ.date) * 1440 + minutesOfTime(occ.startTime)
       for (const raw of alerts) {
@@ -101,9 +105,12 @@ export function selectDueAlerts(opts: {
         const fireTotal = occTotal - offset
         if (fireTotal <= opts.lastCheckTotal || fireTotal > opts.nowTotal) continue
         if (offset > 0 && opts.nowTotal >= occTotal) continue // "before" alert, but the occurrence began
-        out.push({ slot, offsetMinutes: offset, date: occ.date, startTime: occ.startTime, endTime: occ.endTime })
+        hits.push({ slot, offsetMinutes: offset, date: occ.date, startTime: occ.startTime, endTime: occ.endTime })
       }
     }
+    if (hits.length === 0) continue
+    if (!opts.isActiveAndUnmet(slot.objectiveId)) continue
+    out.push(...hits)
   }
   return out
 }

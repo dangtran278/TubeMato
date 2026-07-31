@@ -13,7 +13,8 @@ import { planStartScheduledBlock, applyStartScheduledBlock } from './scheduledBl
 import { syncRepeatingObjectivePeriods } from './objectiveSync'
 import { bumpObjectiveRevision } from './objectiveRevision'
 import { getNotificationIcon } from './notificationIcon'
-import { countCompletions, objectiveStatus } from './objectiveSummary'
+import { objectiveStatus } from './objectiveSummary'
+import { indexCompletions, countCompletionsIndexed } from './objectiveCounts'
 import { isObjectiveMet } from './objectiveDebt'
 import { reassertWidgetTopmost } from './widgetTopmost'
 import {
@@ -429,9 +430,17 @@ function createWidgetWindow() {
 // show/hide events (see createWidgetWindow).
 let widgetTopmostTimer: ReturnType<typeof setInterval> | null = null
 
+/** True for the life of the widget's context menu; see the WIDGET_CONTEXT_MENU handler. */
+let widgetMenuOpen = false
+
 function startWidgetTopmostPoll() {
   if (widgetTopmostTimer) return
-  widgetTopmostTimer = setInterval(() => reassertWidgetTopmost(widgetWindow), 1000)
+  widgetTopmostTimer = setInterval(() => {
+    // Skip while the menu is up: re-asserting topmost would raise the widget through its own
+    // menu, and setAlwaysOnTop also resets skipTaskbar as a side effect (widgetTopmost.ts).
+    if (widgetMenuOpen) return
+    reassertWidgetTopmost(widgetWindow)
+  }, 1000)
 }
 
 function stopWidgetTopmostPoll() {
@@ -566,10 +575,13 @@ const MENU_OBJECTIVE_LIMIT = 10
 function objectiveMenuItems(): Electron.MenuItemConstructorOptions[] {
   const activeId = timer.getSession().activeObjectiveId
   const today = nowDateKey()
-  const logs = getObjectiveLogs()
-  const candidates = (store.get('objectives') as Objective[])
+  // Shared with objectiveSummary.countCompletions so the submenu can't drift from the app's counting
+  // rule. Used here for the shared rule, not speed: see objectiveCounts.ts.
+  const counts = indexCompletions(getObjectiveLogs())
+  const all = store.get('objectives') as Objective[]
+  const candidates = all
     .filter(o => !o.archived)
-    .map(o => ({ o, completed: countCompletions(o, logs) }))
+    .map(o => ({ o, completed: countCompletionsIndexed(o, counts) }))
     // Same rule as the Timer tab's picker: a finished one-time objective is done being chosen.
     .filter(({ o, completed }) => !(o.type === 'one-time' && isObjectiveMet(o, completed)))
     .map(({ o, completed }) => ({ o, status: objectiveStatus(o, completed, today) }))
@@ -577,8 +589,17 @@ function objectiveMenuItems(): Electron.MenuItemConstructorOptions[] {
   const rank = { behind: 0, 'on-track': 1, done: 2 } as const
   candidates.sort((a, b) => rank[a.status] - rank[b.status] || a.o.title.localeCompare(b.o.title))
 
-  const items: Electron.MenuItemConstructorOptions[] = candidates
-    .slice(0, MENU_OBJECTIVE_LIMIT)
+  const shown = candidates.slice(0, MENU_OBJECTIVE_LIMIT)
+  // The checkmark is this menu's only report of what the timer is running against, so keep the
+  // active objective listed even if the archived/met filters or the truncation would drop it.
+  if (activeId && !shown.some(({ o }) => o.id === activeId)) {
+    const active = all.find(o => o.id === activeId)
+    if (active) {
+      shown.push({ o: active, status: objectiveStatus(active, countCompletionsIndexed(active, counts), today) })
+    }
+  }
+
+  const items: Electron.MenuItemConstructorOptions[] = shown
     .map(({ o }) => ({
       label: o.group ? `${o.title}  (${o.group})` : o.title,
       type: 'radio' as const,
@@ -636,7 +657,7 @@ function buildTrayMenu() {
 function createTray() {
   tray = new Tray(loadTraySprite(traySpriteForSession(timer.getSession())))
   tray.setToolTip(trayTooltip(timer.getSession()))
-  tray.setContextMenu(buildTrayMenu())
+  setTrayMenu(buildTrayMenu())
   tray.on('click', () => {
     // Minimized counts as "away", not "on screen", so a tray click brings it back rather than
     // destroying it. isVisible() already returns false when minimized, so it covers both.
@@ -650,6 +671,17 @@ function createTray() {
 
 /** Everything the tray visually depends on; skip OS calls (and store reads) when unchanged. */
 let lastTrayKey = ''
+
+/** `Tray` holds only one context-menu reference, so setContextMenu can drop the menu that's on
+ *  screen right now if a rebuild lands while it's open. Keep it (and the one before it) alive. */
+const trayMenuKeepalive: Electron.Menu[] = []
+
+function setTrayMenu(menu: Electron.Menu) {
+  if (!tray) return
+  trayMenuKeepalive.push(menu)
+  if (trayMenuKeepalive.length > 2) trayMenuKeepalive.shift()
+  tray.setContextMenu(menu)
+}
 
 /** Call when a non-timer dependency of the tray menu changes (e.g. widget visibility). */
 function invalidateTray() {
@@ -667,7 +699,7 @@ function updateTray(session: TimerSession) {
   if (key === lastTrayKey) return
   lastTrayKey = key
   tray.setImage(loadTraySprite(sprite))
-  tray.setContextMenu(buildTrayMenu())
+  setTrayMenu(buildTrayMenu())
   tray.setToolTip(trayTooltip(session))
 }
 
@@ -817,8 +849,11 @@ function showEventCard(a: { id: string; objectiveId: string; title: string; body
 /** Current wall-clock "total minutes" (dayIndex*1440 + minuteOfDay) in the calendar timezone. */
 function nowTotalMinutes(): number {
   const tz = resolveTimeZone((store.get('settings') as Settings).calendarTimeZone)
-  const { hour, minute } = wallClockHourMinute(new Date(), tz)
-  return dayIndexOf(calendarDateKey(new Date(), tz)) * 1440 + hour * 60 + minute
+  // Both halves from one instant; two separate `new Date()` calls could straddle midnight and
+  // expire every live event card at once.
+  const now = new Date()
+  const { hour, minute } = wallClockHourMinute(now, tz)
+  return dayIndexOf(calendarDateKey(now, tz)) * 1440 + hour * 60 + minute
 }
 
 /** Auto-dismiss event cards whose event is now over (checked on each minute tick). */
@@ -1210,11 +1245,18 @@ function scheduleEndOfDayCheck() {
   }
   // Tick once per minute, aligned to :00, since an unaligned interval keeps the launch second as its
   // phase, landing alerts up to ~60s late; aligning drops that to ~1s.
-  const msToTopOfMinute = 60_000 - (Date.now() % 60_000)
-  setTimeout(() => {
-    tick()
-    setInterval(tick, 60_000)
-  }, msToTopOfMinute)
+  let timer: ReturnType<typeof setInterval> | null = null
+  const align = () => {
+    if (timer) { clearInterval(timer); timer = null }
+    setTimeout(() => {
+      tick()
+      timer = setInterval(tick, 60_000)
+    }, 60_000 - (Date.now() % 60_000))
+  }
+  align()
+  // Windows suspends timers across sleep, so the alignment above survives only until the first
+  // lid-close. Re-align on resume and tick immediately to catch up right away.
+  powerMonitor.on('resume', () => { tick(); align() })
 }
 
 // ─── IPC handlers ─────────────────────────────────────────────────────────────
@@ -1311,7 +1353,13 @@ function registerIPC() {
 
   // Summary
   ipcMain.handle(IPC.SUMMARY_GET_PENDING, () => store.get('pendingSummary'))
-  ipcMain.handle(IPC.SUMMARY_CLEAR_PENDING, () => store.set('pendingSummary', null))
+  // Dismissing IS "seen today's summary", so mark the day done too, not just drop the payload;
+  // otherwise the retry loop would pop the same summary right back on the next tick.
+  ipcMain.handle(IPC.SUMMARY_CLEAR_PENDING, () => {
+    store.set('pendingSummary', null)
+    const tz = resolveTimeZone((store.get('settings') as Settings).calendarTimeZone)
+    store.set('lastSummaryDate', calendarDateKey(new Date(), tz))
+  })
   // DEBUG: force the daily summary now, delivering BOTH the overlay card (onToast) and the popup.
   ipcMain.handle(IPC.DEBUG_TRIGGER_SUMMARY, () => {
     const summary = checkDaySummary({ force: true, canPopup: false, onToast: showSummaryCardLive })
@@ -1353,14 +1401,22 @@ function registerIPC() {
   })
   ipcMain.on(IPC.WIDGET_CONTEXT_MENU, () => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return
-    // The widget is focusable:false so it can never steal focus while you work, but a menu owned by a
-    // window that can't be activated never gets the focus-lost event that dismisses it: it stays open
-    // over everything until an item is picked. Lend the widget focus for the life of the menu only.
+    // Re-entrancy guard: a second request landing while a menu is up would let the first menu's
+    // callback drop focusable back to false underneath the second, recreating the defect below.
+    if (widgetMenuOpen) return
+    widgetMenuOpen = true
+    // The widget is focusable:false so it can never steal focus while working, but a menu owned by a
+    // non-activatable window never gets the focus-lost event that dismisses it. Lend focus for the
+    // menu's life only.
+    //
+    // KNOWN DEFECT: the widget keeps foreground after the menu closes, so keystrokes land on an
+    // inputless window until clicked elsewhere. Not worth a native-FFI fix here.
     widgetWindow.setFocusable(true)
     widgetWindow.focus()
     buildWidgetContextMenu().popup({
       window: widgetWindow,
       callback: () => {
+        widgetMenuOpen = false
         if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.setFocusable(false)
       },
     })

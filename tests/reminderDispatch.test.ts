@@ -97,23 +97,32 @@ describe('planSummaryDelivery: the full once-a-day summary decision', () => {
   }
 
   it('before the time: does not fire', () => {
-    expect(planSummaryDelivery({ ...base, nowHHMM: '20:59' })).toEqual({ fire: false, deliver: 'none' })
+    expect(planSummaryDelivery({ ...base, nowHHMM: '20:59' })).toEqual({ fire: false, deliver: 'none', markFired: false })
   })
 
   it('at the time, window free: fires and pops', () => {
-    expect(planSummaryDelivery({ ...base, canPopup: true })).toEqual({ fire: true, deliver: 'popup' })
+    expect(planSummaryDelivery({ ...base, canPopup: true })).toEqual({ fire: true, deliver: 'popup', markFired: true })
   })
 
   it('at the time, window busy in "both": fires and toasts', () => {
-    expect(planSummaryDelivery({ ...base, canPopup: false })).toEqual({ fire: true, deliver: 'toast' })
+    expect(planSummaryDelivery({ ...base, canPopup: false })).toEqual({ fire: true, deliver: 'toast', markFired: true })
   })
 
-  it('"in-app" busy: fires but delivers nothing live (surfaces on cold open)', () => {
-    expect(planSummaryDelivery({ ...base, mode: 'in-app', canPopup: false })).toEqual({ fire: true, deliver: 'none' })
+  it('"in-app" busy: fires but delivers nothing live, and stays unmarked so it retries', () => {
+    // Same retry model as the reminder: the day is only "done" once something reached the user, so a
+    // window that is busy at summaryTime no longer costs the whole day's summary.
+    expect(planSummaryDelivery({ ...base, mode: 'in-app', canPopup: false }))
+      .toEqual({ fire: true, deliver: 'none', markFired: false })
   })
 
   it('off: never fires', () => {
-    expect(planSummaryDelivery({ ...base, mode: 'off', nowHHMM: '23:00' })).toEqual({ fire: false, deliver: 'none' })
+    expect(planSummaryDelivery({ ...base, mode: 'off', nowHHMM: '23:00' })).toEqual({ fire: false, deliver: 'none', markFired: false })
+  })
+
+  it('force delivers a preview but never burns the day', () => {
+    // Marking on a forced trigger would mean the real summary silently never fires at summaryTime.
+    expect(planSummaryDelivery({ ...base, nowHHMM: '02:00', canPopup: true, force: true }))
+      .toEqual({ fire: true, deliver: 'popup', markFired: false })
   })
 
   it('catches up after the time; does not re-fire once fired today', () => {
@@ -342,8 +351,9 @@ describe('planReminderDelivery: invariants over every input combination', () => 
                   expect(r, where).toEqual({ pending: 'clear', deliver: 'none', markFired: false })
                   n++; continue
                 }
-                // mark fired iff we actually delivered something live
-                expect(r.markFired, where).toBe(r.deliver !== 'none')
+                // mark fired iff we actually delivered something live AND this was the real trigger:
+                // a forced preview that marked would silently eat the day's genuine delivery
+                expect(r.markFired, where).toBe(r.deliver !== 'none' && !force)
                 // channel constraints
                 if (r.deliver === 'popup') expect(canPopupLive && mode !== 'off', where).toBe(true)
                 if (r.deliver === 'toast') expect(mode === 'both' && !canPopupLive, where).toBe(true)
@@ -371,7 +381,9 @@ describe('planSummaryDelivery: invariants over every input combination', () => {
               const r = planSummaryDelivery({ mode, lastFiredDate, today: TODAY, nowHHMM, summaryTime, canPopup, force })
               const where = JSON.stringify({ mode, lastFiredDate, nowHHMM, canPopup, force })
 
-              if (mode === 'off') { expect(r, where).toEqual({ fire: false, deliver: 'none' }); continue }
+              if (mode === 'off') { expect(r, where).toEqual({ fire: false, deliver: 'none', markFired: false }); continue }
+              // same retry contract as the reminder: mark only on a real, live delivery
+              expect(r.markFired, where).toBe(r.deliver !== 'none' && !force)
               if (r.deliver !== 'none') expect(r.fire, where).toBe(true)
               if (r.deliver === 'popup') expect(canPopup, where).toBe(true)
               if (r.deliver === 'toast') expect(mode === 'both' && !canPopup, where).toBe(true)

@@ -7,7 +7,6 @@ export type ObjectiveType = 'one-time' | 'repeating'
 // [prevDue+1 … thisDue] (contiguous, no gaps), and the target applies PER occurrence. `daily` is a
 // pure rolling window (every N days, calendar-agnostic); weekly/monthly/yearly anchor to specific
 // calendar days relative to `interval` counted from the objective's creation day (the anchor).
-// See docs/recurrence-and-calendar-plan.md.
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 

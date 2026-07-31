@@ -511,22 +511,75 @@ describe('idempotence, boundary times, and force', () => {
     reminder({ canPopupLive: false, force: true })
     expect(h.toasts).toHaveLength(0)
   })
+
+  it('force never marks the day, so the real reminder still fires at reminderTime', () => {
+    setSettings({ reminderTime: '09:00' })
+    setClock('2026-07-04T02:00:00Z')
+    reminder({ canPopupLive: false, force: true })
+    expect(h.toasts).toHaveLength(1)
+    expect(h.store.lastReminderToastDate).toBeNull() // a debug preview must not burn the day
+    setClock('2026-07-04T09:00:00Z')
+    reminder({ canPopupLive: false })
+    expect(h.toasts).toHaveLength(2)
+    expect(h.store.lastReminderToastDate).toBe('2026-07-04')
+  })
 })
 
 describe('summary: adversarial', () => {
-  it('in-app + busy window: fires (marks + stores) but no toast, no retry (unlike the reminder)', () => {
+  it('in-app + busy window: stores but does NOT mark fired, so it retries when the window frees', () => {
     setMode('dailySummaryMode', 'in-app')
     setSettings({ summaryTime: '21:00' })
     setClock('2026-07-04T21:00:00Z')
     summary({ canPopup: false })
     expect(h.toasts).toHaveLength(0)
-    expect(h.store.pendingSummary).toBeTruthy()
-    expect(h.store.lastSummaryDate).toBe('2026-07-04') // marked immediately (no retry model)
-    // next free tick does NOT re-fire
+    expect(h.store.pendingSummary).toBeTruthy() // stored, so a cold open still surfaces it
+    expect(h.store.lastSummaryDate).toBeNull()  // nothing reached the user → still owed
+    // the next free tick delivers it (previously the day was marked done and this popped nothing)
     setClock('2026-07-04T21:05:00Z')
     const popped: unknown[] = []
     summary({ canPopup: true, onPopupLive: s => popped.push(s) })
-    expect(popped).toHaveLength(0)
+    expect(popped).toHaveLength(1)
+    expect(h.store.lastSummaryDate).toBe('2026-07-04')
+    // and it does not pop a second time
+    setClock('2026-07-04T21:06:00Z')
+    summary({ canPopup: true, onPopupLive: s => popped.push(s) })
+    expect(popped).toHaveLength(1)
+  })
+
+  it('retry ticks re-deliver the snapshot built at summaryTime, without rewriting the store', () => {
+    setMode('dailySummaryMode', 'in-app')
+    setSettings({ summaryTime: '21:00' })
+    setClock('2026-07-04T21:00:00Z')
+    summary({ canPopup: false })
+    const first = h.store.pendingSummary
+    // Work logged after the summary was built must not trigger a rebuild-and-rewrite each tick:
+    // a DaySummary always differs from the previous one, so that would be a whole-file write/minute.
+    h.currentLog = {
+      sessions: [{ id: 's1', date: '2026-07-04', durationSeconds: 1500, naturalComplete: true, startAt: '2026-07-04T21:01:00Z', endAt: '2026-07-04T21:26:00Z' }],
+      procrastinationEvents: [], breakExtensions: [],
+    }
+    setClock('2026-07-04T21:02:00Z')
+    summary({ canPopup: false })
+    expect(h.store.pendingSummary).toBe(first) // same object: not rebuilt, not re-stored
+  })
+
+  it('force delivers but never marks the day, so the real summary still fires on time', () => {
+    setSettings({ summaryTime: '21:00' })
+    setClock('2026-07-04T09:00:00Z') // long before the time
+    summary({ canPopup: false, force: true })
+    expect(h.toasts).toHaveLength(1)
+    expect(h.store.lastSummaryDate).toBeNull() // a debug preview must not burn the day
+    // ...and it must not poison it either: the preview left a stored snapshot stamped with today,
+    // which the retry path would otherwise reuse, freezing the real summary at its 09:00 numbers.
+    h.currentLog = {
+      sessions: [{ id: 's1', date: '2026-07-04', durationSeconds: 1500, naturalComplete: true, startAt: '2026-07-04T10:00:00Z', endAt: '2026-07-04T10:25:00Z' }],
+      procrastinationEvents: [], breakExtensions: [],
+    }
+    setClock('2026-07-04T21:00:00Z')
+    const real = summary({ canPopup: false })
+    expect(h.toasts).toHaveLength(2)
+    expect(h.store.lastSummaryDate).toBe('2026-07-04')
+    expect(real!.pomodorosCompleted).toBe(1) // rebuilt, not the stale preview
   })
 
   it(`reflects the day's real sessions (drives the actual buildDaySummary)`, () => {

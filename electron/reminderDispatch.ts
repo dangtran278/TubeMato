@@ -36,6 +36,8 @@ export function reachedScheduledTime(opts: {
 //   deliver: the live channel this tick (popup / toast / none).
 //   markFired: record `lastReminderToastDate = today` ONLY once actually delivered; 'in-app' with no
 //     free window yields 'none', so it stays unfired and the next tick retries when the window frees.
+//     A forced (debug) trigger never marks: it is a preview, and burning the watermark would mean
+//     the day's real delivery silently never happens.
 export function planReminderDelivery(opts: {
   hasSelections: boolean
   mode: NotifyMode
@@ -55,11 +57,13 @@ export function planReminderDelivery(opts: {
   const pending: 'set' | 'clear' = fire || alreadyFired ? 'set' : 'clear'
   if (!fire) return { pending, deliver: 'none', markFired: false }
   const deliver = liveDeliveryChannel(opts.mode, opts.canPopupLive)
-  return { pending, deliver, markFired: deliver !== 'none' }
+  return { pending, deliver, markFired: deliver !== 'none' && !opts.force }
 }
 
-// The daily-summary decision. Simpler than the reminder: it has no batch and always (re)stores its
-// payload when it fires, so this returns just whether to fire today and the live channel to use.
+// The daily-summary decision, now the same shape as the reminder's. `fire` means "today's summary is
+// due and not yet seen"; `markFired` means it actually reached the user, so 'in-app' with no free
+// window stays unfired and the next tick retries once the window frees. Marking on `fire` alone
+// dropped the whole day's summary whenever the window happened to be minimised at summaryTime.
 export function planSummaryDelivery(opts: {
   mode: NotifyMode
   lastFiredDate: string | null
@@ -68,13 +72,15 @@ export function planSummaryDelivery(opts: {
   summaryTime: string
   canPopup: boolean
   force?: boolean
-}): { fire: boolean; deliver: 'popup' | 'toast' | 'none' } {
-  if (opts.mode === 'off') return { fire: false, deliver: 'none' }
+}): { fire: boolean; deliver: 'popup' | 'toast' | 'none'; markFired: boolean } {
+  if (opts.mode === 'off') return { fire: false, deliver: 'none', markFired: false }
   const fire = reachedScheduledTime({
     lastFiredDate: opts.lastFiredDate, today: opts.today,
     nowHHMM: opts.nowHHMM, scheduledTime: opts.summaryTime, force: opts.force,
   })
-  return { fire, deliver: fire ? liveDeliveryChannel(opts.mode, opts.canPopup) : 'none' }
+  if (!fire) return { fire: false, deliver: 'none', markFired: false }
+  const deliver = liveDeliveryChannel(opts.mode, opts.canPopup)
+  return { fire: true, deliver, markFired: deliver !== 'none' && !opts.force }
 }
 
 // A stale (not-today) payload must never surface. Toast clicks bypass this entirely.
