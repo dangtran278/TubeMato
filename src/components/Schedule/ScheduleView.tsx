@@ -8,9 +8,11 @@ import { useScheduleStore, useObjectiveStore, useSettingsStore, useUiStore, useT
 import { useTimerActions } from '../../hooks/useTimer'
 import { ObjectiveForm } from '../Objectives/ObjectivesView'
 import { CenterSelect } from '../common/CenterSelect'
+import { ChevronIcon } from '../common/ChevronIcon'
 import { RecurrenceEditor } from '../RecurrenceEditor'
 import type { ScheduleSlot, Objective, RecurrenceRule } from '@electron/types'
-import { calendarDateKey, resolveTimeZone, wallClockHourMinute, timeZoneUtcOffsetLabel } from '@electron/calendarDate'
+import { resolveTimeZone, wallClockHourMinute, timeZoneUtcOffsetLabel } from '@electron/calendarDate'
+import { useTodayKey } from '../../hooks/useTodayKey'
 import { addCalendarDays } from '@electron/objectiveDebt'
 import { occurrencesInRange } from '@electron/recurrence'
 import { truncateSeriesBefore } from '@electron/scheduleFire'
@@ -428,7 +430,7 @@ function MonthPicker({ weekStart, todayKey, onPick }: {
         <button className="btn-icon cal-nav__arrow"
           onClick={() => { if (level === 'grid') setMonthFirst(m => shiftMonth(m, -1)); else shiftYearBy(level === 'months' ? -1 : -12) }}
           aria-label={level === 'grid' ? 'Previous month' : level === 'months' ? 'Previous year' : 'Previous years'}>
-          ‹
+          <ChevronIcon dir="left" />
           <span className="cal-nav__hint">{level === 'grid' ? 'Previous month' : level === 'months' ? 'Previous year' : 'Previous years'}</span>
         </button>
         <button className="cal-picker__month"
@@ -439,7 +441,7 @@ function MonthPicker({ weekStart, todayKey, onPick }: {
         <button className="btn-icon cal-nav__arrow"
           onClick={() => { if (level === 'grid') setMonthFirst(m => shiftMonth(m, 1)); else shiftYearBy(level === 'months' ? 1 : 12) }}
           aria-label={level === 'grid' ? 'Next month' : level === 'months' ? 'Next year' : 'Next years'}>
-          ›
+          <ChevronIcon dir="right" />
           <span className="cal-nav__hint">{level === 'grid' ? 'Next month' : level === 'months' ? 'Next year' : 'Next years'}</span>
         </button>
       </div>
@@ -541,7 +543,7 @@ export default function ScheduleView() {
   const activeById = useMemo(() => new Map(activeObjectives.map(o => [o.id, o])), [activeObjectives])
   const slotsById = useMemo(() => new Map(slots.map(s => [s.id, s])), [slots])
   const tz = settings.calendarTimeZone
-  const todayKey = calendarDateKey(new Date(), resolveTimeZone(tz))
+  const todayKey = useTodayKey(tz)
   const [weekStart, setWeekStart] = useState(() => mondayOfKey(todayKey))
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -845,12 +847,12 @@ export default function ScheduleView() {
         <div className="cal-toolbar">
           <div className="cal-nav">
             <button className="btn-icon cal-nav__arrow" onClick={() => setWeekStart(w => addCalendarDays(w, -7))} aria-label="Previous week">
-              ‹
+              <ChevronIcon dir="left" />
               <span className="cal-nav__hint">Previous week</span>
             </button>
             <button className="btn btn-ghost cal-nav__today" onClick={() => setWeekStart(mondayOfKey(todayKey))}>Today</button>
             <button className="btn-icon cal-nav__arrow" onClick={() => setWeekStart(w => addCalendarDays(w, 7))} aria-label="Next week">
-              ›
+              <ChevronIcon dir="right" />
               <span className="cal-nav__hint">Next week</span>
             </button>
           </div>

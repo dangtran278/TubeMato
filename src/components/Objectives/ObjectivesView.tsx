@@ -12,6 +12,7 @@ import { Tooltip } from '../common/Tooltip'
 import { TrashIcon } from '../common/TrashIcon'
 import { DatePicker } from '../common/DatePicker'
 import { calendarDateKey, resolveTimeZone } from '@electron/calendarDate'
+import { useTodayKey } from '../../hooks/useTodayKey'
 import { firstPeriodDue } from '@electron/recurrence'
 import { RecurrenceEditor } from '../RecurrenceEditor'
 import { v4 as uuid } from 'uuid'
@@ -1069,8 +1070,10 @@ export default function ObjectivesView() {
   const { objectives, setObjectives, saveObjective, archiveObjective } = useObjectiveStore()
   const scheduleSlots = useScheduleStore(s => s.slots)
   const { settings, setSettings } = useSettingsStore()
-  const tz = resolveTimeZone(settings.calendarTimeZone)
-  const today = useMemo(() => calendarDateKey(new Date(), tz), [tz])
+  // Advances at midnight instead of freezing at mount, so the day rolling over also refetches the
+  // objectives via the effect below (the renderer has no push channel to hear about the main
+  // process's own period roll).
+  const today = useTodayKey(settings.calendarTimeZone)
   const headerCopy = useMemo(() => ({
     subtitle: objectivesSubtitle(today, settings.personality),
     empty: objectivesEmptyLine(today, settings.personality),

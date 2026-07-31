@@ -1,6 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DaySummary, ObjectiveProgress, Objective, ObjectiveLog, PomodoroSessionRecord, ProcrastinationEvent, TimerSession } from '@electron/types'
 import { calendarDateKey, resolveTimeZone, wallClockHourMinute } from '@electron/calendarDate'
+import { useTodayKey } from '../../hooks/useTodayKey'
 import { formatMinutesHm } from '@electron/minutesDisplay'
 import { useSettingsStore } from '../../store'
 import { formatIsoDateDdMmYyyy, formatIsoDay } from '../../utils/dateDisplay'
@@ -211,12 +212,12 @@ const ContributionCalendar = memo(function ContributionCalendar({
   }, [n])
 
   if (n === 0) {
-    return <div className="contrib contrib--empty">No calendar range.</div>
+    return <div className="contrib card contrib--empty">No calendar range.</div>
   }
   const trackWidth = n * cellPx + Math.max(0, n - 1) * CONTRIB_GAP
   const z = zoneLabel || 'UTC'
   return (
-    <div className="contrib">
+    <div className="contrib card">
       <div className="contrib__head">
         <span className="contrib__title">Focus days</span>
         <span className="contrib__hint" title={`Calendar timezone: ${z}`}>
@@ -241,8 +242,11 @@ const ContributionCalendar = memo(function ContributionCalendar({
               ))}
             </div>
           </div>
+          {/* Same pair as the bar charts, plus it covers the tip-less regions (weekday labels, future cells). */}
           <div
             className="contrib__matrix"
+            onPointerMove={onTipClear}
+            onPointerLeave={onTipClear}
             style={{
               ['--contrib-cols' as string]: String(n),
               ['--contrib-cell' as string]: `${cellPx}px`,
@@ -274,11 +278,11 @@ const ContributionCalendar = memo(function ContributionCalendar({
                         key={`${wi}-${cell.date}`}
                         className="contrib__cell contrib__cell--empty"
                         style={{ gridColumn: wi + 2, gridRow: dayIdx + 1 }}
-                        onPointerMove={e => onTip(
+                        onPointerMove={e => { e.stopPropagation(); onTip(
                           e.clientX,
                           e.clientY,
                           contribHeatmapHoverText(cell.date, 0, focusMinutesByDay[cell.date] ?? 0),
-                        )}
+                        ) }}
                         role="gridcell"
                       />
                     )
@@ -288,11 +292,11 @@ const ContributionCalendar = memo(function ContributionCalendar({
                       key={`${wi}-${cell.date}`}
                       className={`contrib__cell contrib__cell--${cell.level}`}
                       style={{ gridColumn: wi + 2, gridRow: dayIdx + 1 }}
-                      onPointerMove={e => onTip(
+                      onPointerMove={e => { e.stopPropagation(); onTip(
                         e.clientX,
                         e.clientY,
                         contribHeatmapHoverText(cell.date, cell.count, focusMinutesByDay[cell.date] ?? 0),
-                      )}
+                      ) }}
                       role="gridcell"
                     />
                   )
@@ -330,12 +334,13 @@ function fmtAxisMinutes(m: number): string {
  * at a glance without hovering. `bars` is the row of fills (each scaled to `axisMax`); `xAxis` is the
  * row of tick labels beneath, aligned to the bars via a matching left gutter.
  */
-function ChartFrame({ axisMax, ticks, bars, xAxis, baseline }: {
+function ChartFrame({ axisMax, ticks, bars, xAxis, baseline, onTipClear }: {
   axisMax: number
   ticks: number[]
   bars: React.ReactNode
   xAxis: React.ReactNode
   baseline?: { value: number; label: string }  // optional recessive mean/reference line
+  onTipClear?: () => void // owned by the bars, not the card, so a leak between bars doesn't stick
 }) {
   return (
     <>
@@ -349,7 +354,8 @@ function ChartFrame({ axisMax, ticks, bars, xAxis, baseline }: {
           {ticks.map(t => (
             <div key={t} className="bar-chart__gridline" style={{ bottom: `${(t / axisMax) * 100}%` }} />
           ))}
-          <div className="bar-chart__bars">{bars}</div>
+          {/* onPointerMove backstops the 4px inter-bar gaps, which never fire a leave here. */}
+          <div className="bar-chart__bars" onPointerMove={onTipClear} onPointerLeave={onTipClear}>{bars}</div>
           {baseline && baseline.value > 0 && baseline.value <= axisMax && (
             <div className="bar-chart__baseline" style={{ bottom: `${(baseline.value / axisMax) * 100}%` }}>
               <span className="bar-chart__baseline-label">{baseline.label}</span>
@@ -386,17 +392,18 @@ const BarChart = memo(function BarChart({
   const mean = data.length ? data.reduce((a, d) => a + d.value, 0) / data.length : 0
   const baseline = mean > 0 ? { value: mean, label: `avg ${fmtAxisMinutes(Math.round(mean))}` } : undefined
   return (
-    <div className="bar-chart" onPointerLeave={onTipClear}>
+    <div className="bar-chart card" onPointerLeave={onTipClear}>
       <div className="bar-chart__label">{label}</div>
       <ChartFrame
         axisMax={axisMax}
         ticks={ticks}
         baseline={baseline}
+        onTipClear={onTipClear}
         bars={data.map(d => (
           <div
             key={d.date}
             className={`bar-chart__bar-wrap${d.date === todayKey ? ' bar-chart__bar-wrap--today' : ''}`}
-            onPointerMove={e => onTip(e.clientX, e.clientY, formatTooltip(d.date, d.value))}
+            onPointerMove={e => { e.stopPropagation(); onTip(e.clientX, e.clientY, formatTooltip(d.date, d.value)) }}
           >
             <div className="bar-chart__fill" style={{ height: `${(d.value / axisMax) * 100}%`, background: color }} />
           </div>
@@ -459,7 +466,7 @@ const PrimeTimeChart = memo(function PrimeTimeChart({
   const { axisMax, ticks } = niceTimeAxis(Math.max(...minutesByHour))
   const basis = `${windowLabel(windowDays)}${weekdaysOnly ? ' · weekdays' : ''}${!enough ? ' · still light' : ''}`
   return (
-    <div className="bar-chart prime-time" onPointerLeave={onTipClear}>
+    <div className="bar-chart card prime-time" onPointerLeave={onTipClear}>
       <div className="prime-time__header">
         <div className="bar-chart__label">Biological prime time</div>
         <div className="prime-time__modes" role="group" aria-label="Days included">
@@ -477,11 +484,12 @@ const PrimeTimeChart = memo(function PrimeTimeChart({
       <ChartFrame
         axisMax={axisMax}
         ticks={ticks}
+        onTipClear={onTipClear}
         bars={minutesByHour.map((mins, h) => (
           <div
             key={h}
             className={`bar-chart__bar-wrap${h === peakHour ? ' prime-time__bar--peak' : ''}`}
-            onPointerMove={e => onTip(e.clientX, e.clientY, `${hourRangeLabel(h)} · ${formatMinutesHm(mins)} focus`)}
+            onPointerMove={e => { e.stopPropagation(); onTip(e.clientX, e.clientY, `${hourRangeLabel(h)} · ${formatMinutesHm(mins)} focus`) }}
           >
             {/* Selective direct label: only the peak hour gets its magnitude, so it reads without hovering. */}
             {h === peakHour && mins > 0 && (
@@ -715,7 +723,7 @@ export default function AnalyticsView() {
   const { settings } = useSettingsStore()
   const personality = settings.personality
   const tz = resolveTimeZone(settings.calendarTimeZone)
-  const todayKey = useMemo(() => calendarDateKey(new Date(), tz), [tz])
+  const todayKey = useTodayKey(settings.calendarTimeZone)
 
   // Everything here is cross-period, reading the full session history, so nothing resets on a log roll.
   const [allSessions, setAllSessions] = useState<PomodoroSessionRecord[]>([])

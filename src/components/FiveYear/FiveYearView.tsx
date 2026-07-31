@@ -7,6 +7,7 @@ import { GroupBadge } from '../common/GroupBadge'
 import { CenterSelect } from '../common/CenterSelect'
 import { Tooltip } from '../common/Tooltip'
 import { TrashIcon } from '../common/TrashIcon'
+import { ChevronIcon } from '../common/ChevronIcon'
 import { PencilIcon } from '../common/PencilIcon'
 import { ensureGroupRegistered, setGroupColor, pickColorForNewGroup } from '../../utils/groupDisplay'
 import { planYears, overallProgress, usedCategories, yearItems, placeGoal, placeCategoryBlock } from '@electron/fiveYearPlan'
@@ -374,7 +375,8 @@ function GoalContent({ goal, groups, showBadge, expanded, onToggleDone, onToggle
       </div>
       {hasDetail && (
         <button type="button" className="fycard__expand" aria-expanded={expanded} onClick={onToggleExpand}>
-          {expanded ? '▾' : '▸'} {goal.actions.length > 0 ? `${goal.actions.length} action${goal.actions.length > 1 ? 's' : ''}` : 'Note'}
+          <ChevronIcon dir={expanded ? 'down' : 'right'} size={11} />
+          {goal.actions.length > 0 ? `${goal.actions.length} action${goal.actions.length > 1 ? 's' : ''}` : 'Note'}
         </button>
       )}
       {hasDetail && expanded && (
@@ -445,7 +447,7 @@ function CategoryCard({ item, year, groups, dnd, expandedKeys, collapsed, onTogg
         {item.allDone && (
           <button type="button" className="fycatcard__collapse" aria-expanded={!collapsed}
             aria-label={collapsed ? 'Expand category' : 'Collapse category'} onClick={onToggleCollapse}>
-            {collapsed ? '▸' : '▾'}
+            <ChevronIcon dir={collapsed ? 'right' : 'down'} size={13} />
           </button>
         )}
         <Tooltip label="Add a goal to this category">

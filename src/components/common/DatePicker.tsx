@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { SegmentedInput, type Segment } from './SegmentedInput'
+import { ChevronIcon } from './ChevronIcon'
 import './DatePicker.css'
 
 /* ── date helpers (string-based, TZ-safe) ─────────────────────────────────── */
@@ -173,14 +174,16 @@ export function DatePicker({
           }}>
           <div className="datepicker__head">
             <button type="button" className="datepicker__nav" aria-label="Previous"
-              onClick={() => (mode === 'days' ? shiftMonth(-1) : shiftYear(mode === 'months' ? -1 : -12))}>‹</button>
+              onClick={() => (mode === 'days' ? shiftMonth(-1) : shiftYear(mode === 'months' ? -1 : -12))}>
+              <ChevronIcon dir="left" size={15} /></button>
             {mode === 'days'
               ? <button type="button" className="datepicker__title" onClick={() => setMode('months')}>{MONTHS[view.m - 1]} {view.y}</button>
               : mode === 'months'
               ? <button type="button" className="datepicker__title" onClick={() => setMode('years')}>{view.y}</button>
               : <span className="datepicker__title datepicker__title--static">{yearsWindow[0]}–{yearsWindow[11]}</span>}
             <button type="button" className="datepicker__nav" aria-label="Next"
-              onClick={() => (mode === 'days' ? shiftMonth(1) : shiftYear(mode === 'months' ? 1 : 12))}>›</button>
+              onClick={() => (mode === 'days' ? shiftMonth(1) : shiftYear(mode === 'months' ? 1 : 12))}>
+              <ChevronIcon dir="right" size={15} /></button>
           </div>
           {mode === 'days' && (
             <div className="datepicker__grid">
