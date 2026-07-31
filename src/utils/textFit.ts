@@ -6,14 +6,33 @@
 let _ctx: CanvasRenderingContext2D | null = null
 let _family = ''
 
+/** Measured widths keyed on `px|text`. An open picker re-measures its whole list on every scroll or
+ *  resize reflow, so caching turns repeat measurements into a lookup. */
+const _widths = new Map<string, number>()
+
+// Inter and JetBrains Mono load as real @font-face files after first paint, so anything measured
+// before they land used the fallback face. Drop the cache whenever a face finishes loading so
+// those widths self-correct instead of freezing wrong.
+if (typeof document !== 'undefined' && 'fonts' in document) {
+  const invalidate = () => { _widths.clear() }
+  document.fonts.ready.then(invalidate).catch(() => {})
+  // `loadingdone` also covers a weight that loads later, after `ready` already settled.
+  document.fonts.addEventListener('loadingdone', invalidate)
+}
+
 /** Pixel width of `text` at `px` in the app's UI font. Cached canvas + family for cheap reuse. */
 export function textWidth(text: string, px: number): number {
   if (typeof document === 'undefined') return text.length * px * 0.55
+  const key = `${px}|${text}`
+  const hit = _widths.get(key)
+  if (hit !== undefined) return hit
   if (!_ctx) _ctx = document.createElement('canvas').getContext('2d')
   if (!_ctx) return text.length * px * 0.55
   if (!_family) _family = getComputedStyle(document.body).fontFamily || 'sans-serif'
   _ctx.font = `${px}px ${_family}`
-  return _ctx.measureText(text).width
+  const w = _ctx.measureText(text).width
+  _widths.set(key, w)
+  return w
 }
 
 /** Shrink weights [a, b] for two side-by-side fields of natural widths `aW`/`bW` in `avail`px:

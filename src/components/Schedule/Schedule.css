@@ -44,9 +44,31 @@
   gap: var(--sp-3);
   margin-bottom: 10px;
 }
-.cal-nav { display: flex; align-items: center; gap: 6px; }
-.cal-nav__today { font-size: 12px; padding: 4px 12px; }
-.cal-nav__arrow { position: relative; width: 28px; height: 28px; }
+/* One segmented control, not three loose buttons, so prev/Today/next share one border. */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+/* No overflow:hidden on the group, it would clip .cal-nav__hint, which hangs below the buttons. */
+.cal-nav > .cal-nav__arrow:first-child { border-radius: calc(var(--r-md) - 1px) 0 0 calc(var(--r-md) - 1px); }
+.cal-nav > .cal-nav__arrow:last-child  { border-radius: 0 calc(var(--r-md) - 1px) calc(var(--r-md) - 1px) 0; }
+/* Doubled class to beat .btn-ghost's border/radius. Height matches the 28px arrows for a uniform 30px group. */
+.cal-nav__today.cal-nav__today {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+}
+/* Quiet at rest, fills on hover, matching this view's other controls; .btn-icon's always-filled chip
+   was the outlier. Doubled class outranks .btn-icon regardless of stylesheet order. */
+.cal-nav__arrow.cal-nav__arrow { position: relative; width: 28px; height: 28px; background: transparent; }
+.cal-nav__arrow.cal-nav__arrow:hover { background: var(--bg-overlay); color: var(--text-primary); }
 .cal-nav__hint {
   position: absolute;
   left: 50%;
@@ -392,7 +414,9 @@
 /* Calendar hover tooltip content: objective title over its group (a stacked .tooltip-bubble). Wraps
    (incl. breaking long unbroken strings) so the full title/group show, never re-truncated. */
 .cal-tip__title { font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
-.cal-tip__group { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; color: var(--text-muted); font-weight: 500; overflow-wrap: anywhere; }
+/* --text-secondary, not --text-muted: in dark mode --bg-elevated is lighter than the page, so muted
+   drops to 2.3:1 contrast and the group reads as an unlit smudge. */
+.cal-tip__group { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; color: var(--text-secondary); font-weight: 500; overflow-wrap: anywhere; }
 
 .cal-block__time { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.82; }
 .cal-block__time--hidden { display: none; }

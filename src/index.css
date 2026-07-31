@@ -12,6 +12,7 @@
   --bg-elevated:    #1e1e28;
   --bg-overlay:     #252530;
   --bg-hover:       #2a2a38;
+  --bg-overlay-hover: #2a2a38;   /* same as --bg-hover here; light mode below diverges */
 
   --accent:         #e05a3a;     /* tomato red */
   --accent-dim:     #b84a2e;
@@ -95,6 +96,7 @@
   --bg-elevated:    #ffffff;
   --bg-overlay:     #e1e4ea;     /* visible gray: scrollbar thumb, hovers, subtle chips */
   --bg-hover:       #e6e9ef;
+  --bg-overlay-hover: #d6dae1;   /* darker than --bg-overlay: on a light page, away = down */
 
   --accent-glow:    rgba(224, 90, 58, 0.20);
   --break-color:    #2d8fc4;
@@ -420,7 +422,12 @@ a { color: inherit; text-decoration: none; }
 .view-header {
   margin-bottom: var(--sp-8);
 }
+/* 36px matches Objectives' header controls, whose taller row otherwise pushed its h1 lower than
+   every other tab's, causing a jump when switching tabs. */
 .view-header h1 {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -463,14 +470,21 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--border);
 }
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-hover); }
+/* Standalone class, never combined with .btn, so it brings its own centring and transition. */
 .btn-icon {
   width: 36px; height: 36px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--r-md);
   background: var(--bg-overlay);
   color: var(--text-secondary);
   font-size: 16px;
+  transition: all var(--dur-fast) var(--ease);
 }
-.btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+/* --bg-overlay-hover, not --bg-hover: in light mode --bg-hover is lighter than this button's rest
+   state, so hovering made it recede instead of lift. */
+.btn-icon:hover { background: var(--bg-overlay-hover); color: var(--text-primary); }
+/* No transform-based press state: several .btn-icon users already own their own `transform` for
+   layout, and a :active rule would outrank them and make the buttons jump. */
 
 /* ─── Badge ──────────────────────────────────────────────────────────────────── */
 .badge {

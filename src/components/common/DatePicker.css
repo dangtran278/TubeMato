@@ -71,13 +71,15 @@
 .datepicker__nav {
   width: 26px;
   height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   border-radius: var(--r-sm, 6px);
   color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1;
   cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
 }
 .datepicker__nav:hover { background: var(--bg-overlay); color: var(--text-primary); }
 

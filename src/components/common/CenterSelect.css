@@ -44,7 +44,8 @@
 
 /* Reveal-tooltip content (full title over group) for a truncated option: a stacked .tooltip-bubble. */
 .cselect__tip-title { font-weight: 600; overflow-wrap: anywhere; }
-.cselect__tip-group { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); overflow-wrap: anywhere; }
+/* --text-secondary, not muted: same reason as .cal-tip__group in Schedule.css. */
+.cselect__tip-group { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); overflow-wrap: anywhere; }
 
 /* Arrow pinned to the right edge, independent of the centered value. */
 .cselect__arrow {

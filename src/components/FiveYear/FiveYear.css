@@ -6,9 +6,11 @@
   justify-content: space-between;
   gap: var(--sp-4);
 }
+/* Same 36px as .view-header h1, so "N of M done" centres against the title instead of sitting at y=0. */
 .fiveyear-header__right {
   display: flex;
   align-items: center;
+  min-height: 36px;
   gap: var(--sp-4);
   flex-shrink: 0;
 }
@@ -97,14 +99,13 @@
 .fycard:hover { border-color: var(--border-hover); border-left-color: var(--cat-color); }
 .fycard--done { opacity: 0.6; }
 
+/* No min-height: the old 26px padded a one-line title with ~7px of dead space, making "N actions" read
+   ~15px away instead of 8px. The tools are position:absolute so they don't need the reserved height. */
 .fycard__top {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
-  /* Matches the height the hover tools used to set while they were in flow, so taking them out
-     reclaims the horizontal space without shortening the card. */
-  min-height: 26px;
 }
 .fycard__check {
   flex-shrink: 0;
@@ -177,8 +178,13 @@
 /* Destructive tools go red on hover wherever they appear (see .cselect__optdelete for the twin). */
 .fycard__tool.fycard__tool--del:hover { color: var(--danger); }
 
+/* inline-flex centres the caret against the label. It used to be the ▸/▾ glyph pair, which fonts cut
+   at different optical sizes, so collapsed and expanded visibly disagreed. */
 .fycard__expand {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-muted);
   padding: 0 var(--sp-1);

@@ -116,12 +116,9 @@
 }
 
 /* ─── Contribution calendar (GitHub-style) ─────────────────────────────────── */
+/* Chrome from .card in the markup; see .bar-chart. */
 .contrib {
   margin-bottom: var(--sp-6);
-  padding: var(--sp-5);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
   /* --contrib-empty-bg / --contrib-empty-border come from the theme tokens (index.css). */
   --contrib-1: rgba(224, 90, 58, 0.18);
   --contrib-2: rgba(224, 90, 58, 0.38);
@@ -291,12 +288,9 @@
 }
 
 /* ─── Bar chart ──────────────────────────────────────────────────────────────── */
+/* Chrome comes from .card in the markup now. */
 .bar-chart {
   min-width: 0;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: var(--sp-5);
 }
 
 .bar-chart__label {
