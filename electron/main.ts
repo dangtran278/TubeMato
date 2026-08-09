@@ -129,7 +129,7 @@ let notificationsWindow: BrowserWindow | null = null
 // Event cards persist until their event is over: id → occurrence-end in wall-clock total minutes.
 const notifyEventEnds = new Map<string, number>()
 // Cards requested before the overlay renderer finished loading; flushed on did-finish-load.
-let notifyPending: AppNotification[] = []
+let notifyPending: { card: AppNotification; bell?: BellType }[] = []
 let notifyReady = false
 let tray: Tray | null = null
 let pendingNav: string | null = null
@@ -189,15 +189,13 @@ app.whenReady().then(() => {
   // --hidden arg registered in applyAutoLaunch(); a manual launch (no arg) shows the window.
   const startHidden = process.argv.includes('--hidden')
 
-  // Runs before createMainWindow so an already-due reminder is ready for the renderer's cold-open;
-  // onPopupLive is a no-op here since the window doesn't exist yet (hidden launches still toast).
-  checkObjectiveReminders({
-    onToast: showReminderCard,
-    onPopupLive: () => {},
-    canPopupLive: !startHidden,
-  })
+  // Runs before createMainWindow so an already-due reminder is stored for the renderer's cold-open
+  // read. No window exists yet, so a visible launch has no live channel and leaves the day unfired;
+  // the first minute tick is the real delivery. A hidden launch never mounts a renderer, so the toast
+  // stays its only channel.
+  checkObjectiveReminders(startHidden ? { onToast: showReminderCard } : {})
   // Same catch-up for the daily summary, mirroring the reminder's startup handling above.
-  checkDaySummary({ onPopupLive: () => {}, onToast: showSummaryCard, canPopup: !startHidden })
+  checkDaySummary(startHidden ? { onToast: showSummaryCard, canPopup: false } : { canPopup: false })
   // Catch-up only, no chime: surface missed event cards, but skip ones already over (stale from while
   // the app was closed) so launch isn't buried under a wall of past events.
   checkSchedule({ onAlert: a => { if (a.endTotal > nowTotalMinutes()) showEventCard(a) } })
@@ -739,10 +737,13 @@ function runScheduleCheck() {
   // Captured before the scan so the watermark can only ever lag it, never skip past an alert that
   // came due during the scan itself.
   const startedAt = new Date().toISOString()
-  checkSchedule({ onAlert: a => { showEventCard(a); shown++ }, since: alertCheckedUpTo })
+  // One chime however many alerts came due at once, carried by the first card.
+  checkSchedule({
+    onAlert: a => { showEventCard(a, shown === 0 ? 'schedule-alert' : undefined); shown++ },
+    since: alertCheckedUpTo,
+  })
   alertCheckedUpTo = startedAt
   pruneExpiredEventCards()
-  if (shown > 0) ringBell('schedule-alert') // chime only when a card actually showed, never without
 }
 
 /** Record where the alert scan got to, so a clean quit doesn't re-deliver on the next launch. */
@@ -787,15 +788,31 @@ function createNotificationsWindow() {
   notificationsWindow.on('closed', () => { stopNotifTopmostPoll(); notificationsWindow = null; notifyReady = false })
   notificationsWindow.webContents.once('did-finish-load', () => {
     notifyReady = true
-    for (const n of notifyPending) notificationsWindow?.webContents.send(IPC.NOTIFY_ADD, n)
+    for (const p of notifyPending) {
+      notificationsWindow?.webContents.send(IPC.NOTIFY_ADD, p.card)
+      if (p.bell) ringBell(p.bell)
+    }
     notifyPending = []
+  })
+  // A load failure would otherwise leave notifyReady false forever; drop the window so the next card
+  // builds a fresh one.
+  notificationsWindow.webContents.once('did-fail-load', (_e, code, desc) => {
+    console.error(`notifications window failed to load (${code} ${desc})`)
+    notifyPending = []
+    notificationsWindow?.destroy()
   })
 }
 
-function showAppNotification(n: AppNotification) {
+// Rings the chime at the moment the card is actually sent, not before. A cold overlay window can
+// take seconds to boot, and ringing on request desyncs the sound from the card (or plays with none).
+function showAppNotification(card: AppNotification, bell?: BellType) {
   if (!notificationsWindow || notificationsWindow.isDestroyed()) createNotificationsWindow()
-  if (notifyReady && notificationsWindow) notificationsWindow.webContents.send(IPC.NOTIFY_ADD, n)
-  else notifyPending.push(n)
+  if (notifyReady && notificationsWindow) {
+    notificationsWindow.webContents.send(IPC.NOTIFY_ADD, card)
+    if (bell) ringBell(bell)
+  } else {
+    notifyPending.push({ card, bell })
+  }
 }
 
 // Reading-time budgets (ms) for the auto-dismiss cards; the summary carries the most to read.
@@ -818,32 +835,35 @@ function nowDateKey(): string {
   return calendarDateKey(new Date(), resolveTimeZone((store.get('settings') as Settings).calendarTimeZone))
 }
 
-function showReminderCard(t: { title: string; body: string }) {
+function showReminderCard(t: { title: string; body: string }, bell?: BellType) {
   showAppNotification({
     id: `reminder-${nowDateKey()}`, kind: 'reminder', persist: false, durationMs: NOTIFY_DURATION.reminder,
     title: t.title, body: t.body, action: 'open-reminder', iconDataUrl: mascotDataUrl(),
-  })
+  }, bell)
 }
 
-function showSummaryCard(t: { title: string; body: string }) {
+function showSummaryCard(t: { title: string; body: string }, bell?: BellType) {
   showAppNotification({
     id: `summary-${nowDateKey()}`, kind: 'summary', persist: false, durationMs: NOTIFY_DURATION.summary,
     title: t.title, body: t.body, action: 'open-analytics', iconDataUrl: mascotDataUrl(),
-  })
+  }, bell)
 }
 
 // Card + chime, for "live" deliveries only (the startup catch-up toasts stay silent, like checkSchedule's).
-function showReminderCardLive(t: { title: string; body: string }) { showReminderCard(t); ringBell('notify-alert') }
-function showSummaryCardLive(t: { title: string; body: string }) { showSummaryCard(t); ringBell('notify-alert') }
+function showReminderCardLive(t: { title: string; body: string }) { showReminderCard(t, 'notify-alert') }
+function showSummaryCardLive(t: { title: string; body: string }) { showSummaryCard(t, 'notify-alert') }
 
 // Show a due event as a persistent card. Auto-dismiss (via pruneExpiredEventCards) is scheduled only
 // when the event's end is still ahead; a past or misconfigured end just persists until the user acts.
-function showEventCard(a: { id: string; objectiveId: string; title: string; body: string; endTotal: number }) {
+function showEventCard(
+  a: { id: string; objectiveId: string; title: string; body: string; endTotal: number },
+  bell?: BellType,
+) {
   if (a.endTotal > nowTotalMinutes()) notifyEventEnds.set(a.id, a.endTotal)
   showAppNotification({
     id: a.id, kind: 'event', persist: true, title: a.title, body: a.body,
     action: 'start-block', actionData: a.objectiveId, actionLabel: 'Start', iconDataUrl: mascotDataUrl(),
-  })
+  }, bell)
 }
 
 /** Current wall-clock "total minutes" (dayIndex*1440 + minuteOfDay) in the calendar timezone. */

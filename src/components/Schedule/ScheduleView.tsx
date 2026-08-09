@@ -201,6 +201,9 @@ function SlotForm({ initial, draft, objectives, today, onSave, onDelete, onClose
   const [recurrence, setRecurrence] = useState<RecurrenceRule>(initial?.recurrence ?? { frequency: 'daily', interval: 1 })
   const [until, setUntil] = useState(initial?.until ?? '')
   const untilTouched = useRef(!!initial?.until)
+  // Only a new event or a one-off being turned into a series may have `until` auto-filled. An
+  // existing series with no end date means "repeats forever" and must stay that way on open.
+  const untilFromObjective = useRef(!initial?.recurrence)
   const [err, setErr] = useState<string | null>(null)
   const [creatingObjective, setCreatingObjective] = useState(false)
 
@@ -219,28 +222,43 @@ function SlotForm({ initial, draft, objectives, today, onSave, onDelete, onClose
     })
   }, [objectives, today])
 
-  // Same order as the Objectives tab; met objectives are dropped, except the event's own.
+  // Same exclusion rule as the tray submenu and the Timer selector: only a met ONE-TIME objective is
+  // dropped. A met repeating one recurs, so it stays pickable.
   const pickable = useMemo(
     () => sortActiveObjectives(
-      objectives.filter(o => o.id === initial?.objectiveId || !isObjectiveMet(o, completions[o.id] ?? 0)),
+      objectives.filter(o => (
+        o.id === initial?.objectiveId ||
+        !(o.type === 'one-time' && isObjectiveMet(o, completions[o.id] ?? 0))
+      )),
       o => completions[o.id] ?? 0,
       today,
     ),
     [objectives, completions, today, initial?.objectiveId],
   )
-  // A new event may default onto a now-hidden objective; snap the selection to the first pickable one.
+  // A new event may default onto an objective that isn't pickable; snap to the first that is. Never
+  // for an existing event, since that would silently retarget a saved slot.
   useEffect(() => {
+    if (initial) return
     if (objectiveId && !pickable.some(o => o.id === objectiveId)) setObjectiveId(pickable[0]?.id ?? '')
-  }, [pickable, objectiveId])
+  }, [pickable, objectiveId, initial])
 
   const toggleRepeats = (on: boolean) => {
     setErr(null)
     setRepeats(on)
-    if (on && !untilTouched.current && !until) {
-      const obj = objectives.find(o => o.id === objectiveId)
-      if (obj?.dueDate) setUntil(obj.dueDate) // prefill until = objective's end (repeating) / due (one-time)
-    }
   }
+
+  const linkedObjective = objectives.find(o => o.id === objectiveId)
+  const linkedDueDate = linkedObjective?.dueDate ?? ''
+  // "Repeat until" inherits the objective's End/Due date and keeps following it as the picker
+  // changes, until the user sets a date. `until < date` is rejected by `save`, so don't inherit it.
+  useEffect(() => {
+    if (!repeats || untilTouched.current || !untilFromObjective.current) return
+    setUntil(linkedDueDate && linkedDueDate >= date ? linkedDueDate : '')
+  }, [repeats, linkedDueDate, date])
+
+  const inheritedFrom = !untilTouched.current && untilFromObjective.current && until && linkedObjective
+    ? { title: linkedObjective.title, field: linkedObjective.type === 'one-time' ? 'Due date' : 'End date' }
+    : null
 
   // Defer reminder / summary popups while this form is open.
   useEffect(() => {
@@ -366,6 +384,9 @@ function SlotForm({ initial, draft, objectives, today, onSave, onDelete, onClose
                   <label className="form-label">Repeat until</label>
                   <DatePicker ariaLabel="Repeat until" clearable value={until}
                     onChange={v => { setErr(null); untilTouched.current = true; setUntil(v) }} />
+                  {inheritedFrom && (
+                    <span className="form-hint">From {inheritedFrom.title}'s {inheritedFrom.field}.</span>
+                  )}
                 </div>
               }
             />

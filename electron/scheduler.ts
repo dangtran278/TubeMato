@@ -171,12 +171,17 @@ export function checkObjectiveReminders(
   const payload = buildAndStoreReminderPayload(settings, today)
   if (!payload) return null
 
-  if (plan.deliver === 'popup') {
-    opts.onPopupLive!(payload)
-  } else if (plan.deliver === 'toast') {
-    opts.onToast?.({ title: payload.title, body: buildToastBody(payload.items) })
+  // `markFired` is the plan's verdict on the channel; it can't know whether the caller supplied a
+  // handler for it, so gate the watermark on delivery actually having run.
+  let delivered = false
+  if (plan.deliver === 'popup' && opts.onPopupLive) {
+    opts.onPopupLive(payload)
+    delivered = true
+  } else if (plan.deliver === 'toast' && opts.onToast) {
+    opts.onToast({ title: payload.title, body: buildToastBody(payload.items) })
+    delivered = true
   }
-  if (plan.markFired) store.set('lastReminderToastDate', today)
+  if (plan.markFired && delivered) store.set('lastReminderToastDate', today)
 
   return payload
 }
@@ -226,18 +231,22 @@ export function checkDaySummary(opts: {
   // A forced preview persists neither: a stored one stamped with today would get reused by the real
   // delivery at summaryTime, freezing it at the debug button's numbers.
   if (!opts.force && summary !== stored) store.set('pendingSummary', summary)
-  if (plan.markFired) store.set('lastSummaryDate', today)
-  if (plan.deliver === 'popup') {
-    opts.onPopupLive?.(summary)
-  } else if (plan.deliver === 'toast') {
-    opts.onToast?.({
+  // Deliver first, then mark, same gate as checkObjectiveReminders above.
+  let delivered = false
+  if (plan.deliver === 'popup' && opts.onPopupLive) {
+    opts.onPopupLive(summary)
+    delivered = true
+  } else if (plan.deliver === 'toast' && opts.onToast) {
+    opts.onToast({
       title: dailySummaryNotificationTitle(settings.personality),
       body: dailySummaryNotificationBody(
         summary.pomodorosCompleted, summary.totalFocusMinutes, summary.objectiveVerdict,
         summary.objectiveCheckinsToday, settings.personality,
       ),
     })
+    delivered = true
   }
+  if (plan.markFired && delivered) store.set('lastSummaryDate', today)
   return summary
 }
 

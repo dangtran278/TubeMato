@@ -37,10 +37,12 @@
    more visible the longer you stall (opacity set inline from procrastinationSeconds).
    z-index 0 keeps it under the countdown (.timer-center is z-index 1); the
    brightness/blur make it a looming shadow rather than a sharp foreground image. */
+/* bottom is 0, not negative: the drop-shadow paints outside the image's box, and any part hanging
+   below .timer-ring-wrapper got its glow clipped by an ancestor's overflow. */
 .timer-loom {
   position: absolute;
   z-index: 0;
-  bottom: -10px;
+  bottom: 0;
   left: 50%;
   width: 200px;
   height: 200px;
