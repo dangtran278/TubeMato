@@ -11,6 +11,9 @@ import '@fontsource/jetbrains-mono/latin-500.css'
 import '@fontsource/jetbrains-mono/latin-700.css'
 import './index.css'
 import App from './App'
+import { installAnimationGate } from './utils/animationGate'
+
+installAnimationGate()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

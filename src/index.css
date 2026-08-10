@@ -627,8 +627,28 @@ a { color: inherit; text-decoration: none; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes graceFlash { 0%, 100% { color: var(--danger); } 50% { color: var(--text-primary); } }
 
-.animate-pulse { animation: pulse 2s infinite; }
-.animate-spin  { animation: spin 1s linear infinite; }
+/* Every infinite animation in the app, paused via animationGate.ts while hidden/unfocused. */
+:root[data-anim-paused] .bridge-hint__dot,
+:root[data-anim-paused] .mascot-wrap__zzz,
+:root[data-anim-paused] .mascot--asleep,
+:root[data-anim-paused] .objective-card--tone-overdue::after,
+:root[data-anim-paused] .cal-block--running::before {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bridge-hint__dot,
+  .mascot-wrap__zzz,
+  .mascot--asleep,
+  .objective-card--tone-overdue::after,
+  .cal-block--running::before {
+    animation: none;
+  }
+  /* These three carry their resting pose in the keyframes, not the base rule, so
+     dropping the animation would snap the sleeping tomato upright and hide both
+     the 💤 and the overdue glow outright. */
+  .mascot--asleep { transform: rotate(-5deg); }
+  .mascot-wrap__zzz { opacity: 0.8; }
+  .objective-card--tone-overdue::after { opacity: 0.55; }
+}
