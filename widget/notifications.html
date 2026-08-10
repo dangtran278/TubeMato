@@ -117,10 +117,13 @@
         height: 3px;
         background: rgba(255, 255, 255, 0.06);
       }
+      /* Drained via scaleX, not width: width is a layout property, so animating it relaid out and
+         repainted the card on every frame. */
       .ntf__fill {
         height: 100%;
         width: 100%;
         background: var(--kind, #e05a3a);
+        transform-origin: left center;
       }
 
       @keyframes ntf-in {
@@ -161,14 +164,47 @@
       const cards = []; // { id, data, el, remaining, persist }
       let hovering = false;
       let lastTs = 0;
+      let frameHandle = null; // non-null only while the drain loop is running
 
-      stack.addEventListener("mouseenter", () => (hovering = true));
-      stack.addEventListener("mouseleave", () => (hovering = false));
+      stack.addEventListener("mouseenter", () => { hovering = true; syncFrameLoop(); });
+      stack.addEventListener("mouseleave", () => { hovering = false; syncFrameLoop(); });
 
       function activeIndex() {
         for (let i = cards.length - 1; i >= 0; i--) if (!cards[i].persist) return i;
         return -1;
       }
+
+      function wantFrames() {
+        return activeIndex() >= 0 && !hovering;
+      }
+
+      // Called from INSIDE the loop on every frame; must not touch lastTs, or dt is always 0 and
+      // the bar never drains.
+      function armNextFrame() {
+        if (frameHandle !== null) return;
+        if (wantFrames()) frameHandle = requestAnimationFrame(frame);
+      }
+
+      // Called from OUTSIDE the loop (card add/remove, hover). Only this owns starting a fresh
+      // lastTs baseline.
+      function syncFrameLoop() {
+        if (wantFrames()) {
+          if (frameHandle === null) {
+            lastTs = 0; // fresh baseline: never bill the gap since the loop last ran
+            frameHandle = requestAnimationFrame(frame);
+          }
+        } else if (frameHandle !== null) {
+          cancelAnimationFrame(frameHandle);
+          frameHandle = null;
+        }
+      }
+
+      // A frame requested while hidden may never be delivered, leaving frameHandle stuck non-null.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") return;
+        if (frameHandle !== null) { cancelAnimationFrame(frameHandle); frameHandle = null; }
+        syncFrameLoop();
+      });
 
       function relayout() {
         // Measure synchronously (reading the rect forces layout) and let main size + bottom-right-
@@ -186,6 +222,7 @@
         cards.splice(i, 1);
         N.dismissed(id);
         relayout();
+        syncFrameLoop(); // the drained card may have been the last one worth animating
       }
 
       function fireAction(card) {
@@ -266,13 +303,15 @@
         const el = buildEl(n);
         stack.appendChild(el); // newest at the bottom
         cards.push({ id: n.id, data: n, el, remaining: n.durationMs || 0, persist: !!n.persist });
-        // The frame loop was throttled while the window was hidden; drop the stale gap so the newly
-        // active card doesn't lose a big chunk of time on the first frame after we re-show.
+        // Drop the stale gap so the newly active card doesn't lose a big chunk of time on its first
+        // frame, whether the loop was stopped (nothing to drain) or throttled (window hidden).
         lastTs = 0;
         relayout();
+        syncFrameLoop();
       }
 
       function frame(ts) {
+        frameHandle = null;
         const dt = lastTs ? ts - lastTs : 0;
         lastTs = ts;
         const ai = activeIndex();
@@ -281,12 +320,11 @@
           c.remaining -= dt;
           const frac = Math.max(0, c.remaining / c.data.durationMs);
           const fill = c.el.querySelector(".ntf__fill");
-          if (fill) fill.style.width = frac * 100 + "%";
+          if (fill) fill.style.transform = "scaleX(" + frac + ")";
           if (c.remaining <= 0) removeCard(c.id);
         }
-        requestAnimationFrame(frame);
+        armNextFrame();
       }
-      requestAnimationFrame(frame);
 
       N.onAdd(addCard);
       N.onDismiss(removeCard); // main: this event is over

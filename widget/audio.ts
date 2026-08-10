@@ -1,4 +1,5 @@
 import { synthBell, synthGraceAlert, synthOverdueAlert, synthScheduleAlert, synthNotifyAlert } from '@/utils/audioSynth'
+import { getAudioContext as getCtx } from '@/utils/audioContext'
 
 declare global {
   interface Window {
@@ -10,14 +11,6 @@ declare global {
       playNotifyAlert: (vol: number) => void
     }
   }
-}
-
-let audioCtx: AudioContext | null = null
-
-function getCtx(): AudioContext {
-  if (!audioCtx || audioCtx.state === 'closed') audioCtx = new AudioContext()
-  if (audioCtx.state === 'suspended') audioCtx.resume()
-  return audioCtx
 }
 
 window._tmaudio = {

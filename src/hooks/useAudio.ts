@@ -1,18 +1,10 @@
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import { useSettingsStore } from '../store'
 import { synthBell, synthGraceAlert, synthOverdueAlert, synthScheduleAlert, synthNotifyAlert } from '../utils/audioSynth'
+import { getAudioContext as getCtx } from '../utils/audioContext'
 
 export function useAudio() {
-  const audioCtxRef = useRef<AudioContext | null>(null)
   const { settings } = useSettingsStore()
-
-  function getCtx(): AudioContext {
-    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-      audioCtxRef.current = new AudioContext()
-    }
-    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
-    return audioCtxRef.current
-  }
 
   const playBell = useCallback(() => {
     synthBell(getCtx(), settings.bellVolume / 100)
