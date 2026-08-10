@@ -285,6 +285,15 @@ function broadcastTheme(theme: 'dark' | 'light') {
   }
 }
 
+// Skipped while minimized: Windows fires 'unmaximize' on minimize, which would forget a maximized
+// window the moment it goes to the taskbar.
+function rememberMaximized(maximized: boolean) {
+  if (mainWindow?.isMinimized()) return
+  const settings = store.get('settings')
+  if (settings.mainWindowMaximized === maximized) return
+  store.set('settings', { ...settings, mainWindowMaximized: maximized })
+}
+
 function createMainWindow() {
   const theme = currentTheme()
   mainWindow = new BrowserWindow({
@@ -312,6 +321,8 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     applyWindowIcon(mainWindow)
+    // Before show, so it never flashes at its restored size first.
+    if (store.get('settings').mainWindowMaximized) mainWindow?.maximize()
     mainWindow?.show()
   })
 
@@ -325,8 +336,14 @@ function createMainWindow() {
     if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
   })
 
-  mainWindow.on('maximize', () => mainWindow?.webContents.send(IPC.WINDOW_STATE, true))
-  mainWindow.on('unmaximize', () => mainWindow?.webContents.send(IPC.WINDOW_STATE, false))
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send(IPC.WINDOW_STATE, true)
+    rememberMaximized(true)
+  })
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send(IPC.WINDOW_STATE, false)
+    rememberMaximized(false)
+  })
 
   // Ticks are skipped while hidden or minimized, so push the current session when the window comes
   // back. Both events are needed: minimize/restore doesn't reliably fire 'show' on Windows.
@@ -1565,6 +1582,9 @@ function registerIPC() {
   ipcMain.on(IPC.APP_GET_INITIAL_NAV, (e) => {
     e.returnValue = pendingNav ?? null
     pendingNav = null
+  })
+  ipcMain.on(IPC.WINDOW_GET_INITIAL_MAXIMIZED, (e) => {
+    e.returnValue = store.get('settings').mainWindowMaximized
   })
 
   ipcMain.handle(IPC.BRIDGE_EXTENSION_PATH, () => {

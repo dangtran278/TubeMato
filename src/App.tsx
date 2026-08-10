@@ -154,7 +154,7 @@ export default function App() {
 
   const [showAbout, setShowAbout] = useState(false)
   const [aboutMsg, setAboutMsg] = useState(() => aboutMessage(settings.personality))
-  const [maximized, setMaximized] = useState(false)
+  const [maximized, setMaximized] = useState(() => window.tubemato.app.getInitialMaximized())
   // `aboutPokes` only ever climbs (keys the shake replay); the tier clamps at the meltdown line.
   const [aboutPokes, setAboutPokes] = useState(0)
   // The poke escalation is a passive-aggressive gag; calm mode keeps the plain about line,

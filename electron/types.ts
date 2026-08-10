@@ -70,6 +70,8 @@ export interface Settings {
   notifyProcrastinationNudge: boolean
   logRollPeriod: LogRollPeriod
   miniWidgetPosition: { x: number; y: number }
+  /** Restore the main window maximized if it was maximized when last used. */
+  mainWindowMaximized: boolean
   showMiniWidget: boolean
   streakThreshold: number         // pomodoros/day to count as streak day
   /** Default for new repeating objectives: carry missed completions forward as debt. Each objective
@@ -149,6 +151,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // Off-screen on purpose: clampWidgetPosition treats it as invisible and resets to top-center
   // of the primary display, so a fresh install starts there without hardcoding a screen size.
   miniWidgetPosition: { x: -99999, y: -99999 },
+  mainWindowMaximized: false,
   showMiniWidget: true,
   streakThreshold: 4,
   carryDebt: true,
@@ -527,6 +530,7 @@ export const IPC = {
   APP_MINIMIZE: 'app:minimize',
   APP_MAXIMIZE: 'app:maximize',
   WINDOW_STATE: 'window:state',
+  WINDOW_GET_INITIAL_MAXIMIZED: 'window:get-initial-maximized',
   SETTINGS_CHANGE: 'settings:change',
   APP_NAV: 'app:nav',
   APP_SHOW_MAIN_AT: 'app:show-main-at',

@@ -4,7 +4,9 @@ import { DEFAULT_SETTINGS } from '@electron/types'
 import { stripTrayManagedFields } from '../src/utils/settingsSave'
 
 /** Written from outside the Settings page, so a save of the page's stale snapshot must not carry them. */
-const EXTERNALLY_OWNED = ['showMiniWidget', 'miniWidgetPosition', 'hideExtensionGuide'] as const
+const EXTERNALLY_OWNED = [
+  'showMiniWidget', 'miniWidgetPosition', 'mainWindowMaximized', 'hideExtensionGuide',
+] as const
 
 describe('stripTrayManagedFields', () => {
   it('omits showMiniWidget so a stale page copy cannot revert a tray toggle', () => {
@@ -16,6 +18,12 @@ describe('stripTrayManagedFields', () => {
   it('omits miniWidgetPosition so a stale page copy cannot revert a drag', () => {
     const stalePageCopy = { ...DEFAULT_SETTINGS, miniWidgetPosition: { x: 10, y: 20 } }
     expect('miniWidgetPosition' in stripTrayManagedFields(stalePageCopy)).toBe(false)
+  })
+
+  it('omits mainWindowMaximized so a stale page copy cannot forget a maximize', () => {
+    // Maximized after this page loaded; the page still holds the restored-size value.
+    const stalePageCopy = { ...DEFAULT_SETTINGS, mainWindowMaximized: false }
+    expect('mainWindowMaximized' in stripTrayManagedFields(stalePageCopy)).toBe(false)
   })
 
   it('omits hideExtensionGuide so a stale page copy cannot bring the guide back', () => {

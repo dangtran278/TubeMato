@@ -107,6 +107,7 @@ interface TubematoAPI {
     consumeExtensionGuide: () => Promise<boolean>
     setExtensionGuideHidden: (hidden: boolean) => Promise<void>
     getInitialNav: () => string | null
+    getInitialMaximized: () => boolean
     onNavigate: (cb: (view: string) => void) => UnsubFn
     onWindowState: (cb: (maximized: boolean) => void) => UnsubFn
     getBridgeExtensionPath: () => Promise<string | null>

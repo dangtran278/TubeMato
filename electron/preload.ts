@@ -14,6 +14,10 @@ ipcRenderer.on(IPC.OBJECTIVE_REMINDER_SHOW, (_e, payload: ObjectiveReminderPaylo
 // Main sets pendingNav before creating the window; this consumes it immediately.
 const _initialNav: string | null = ipcRenderer.sendSync(IPC.APP_GET_INITIAL_NAV)
 
+// Main maximizes before the window shows, beating the renderer's 'maximize' listener; read the
+// persisted flag directly instead.
+const _initialMaximized: boolean = Boolean(ipcRenderer.sendSync(IPC.WINDOW_GET_INITIAL_MAXIMIZED))
+
 contextBridge.exposeInMainWorld('tubemato', {
   // ─── Timer ─────────────────────────────────────────────────────────────────
   timer: {
@@ -144,6 +148,7 @@ contextBridge.exposeInMainWorld('tubemato', {
     setExtensionGuideHidden: (hidden: boolean): Promise<void> =>
       ipcRenderer.invoke(IPC.EXT_GUIDE_SET_HIDDEN, hidden),
     getInitialNav: () => _initialNav,
+    getInitialMaximized: () => _initialMaximized,
     onNavigate: (cb: (view: string) => void) => {
       const handler = (_: Electron.IpcRendererEvent, view: string) => cb(view)
       ipcRenderer.on(IPC.APP_NAV, handler)
