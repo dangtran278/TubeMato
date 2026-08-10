@@ -1,6 +1,6 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DaySummary, ObjectiveProgress, Objective, ObjectiveLog, PomodoroSessionRecord, ProcrastinationEvent, TimerSession } from '@electron/types'
-import { calendarDateKey, resolveTimeZone, wallClockHourMinute } from '@electron/calendarDate'
+import { resolveTimeZone, wallClockHourMinute } from '@electron/calendarDate'
 import { useTodayKey } from '../../hooks/useTodayKey'
 import { formatMinutesHm } from '@electron/minutesDisplay'
 import { useSettingsStore } from '../../store'
@@ -21,7 +21,8 @@ import {
   summarySuccessNote,
 } from '@electron/personalityCopy'
 import { countsAsFinishedPomodoro } from '@electron/sessionFilters'
-import { addCalendarDays, effectiveTargetCompletions } from '@electron/objectiveDebt'
+import { addCalendarDays, isObjectiveMet, repeatingPeriodEndDate } from '@electron/objectiveDebt'
+import { countCompletions } from '@electron/objectiveSummary'
 import { currentStreakFromCounts, longestStreakRangeFromCounts } from '@electron/streakCalc'
 import {
   startOfWeekMondayUtc,
@@ -189,7 +190,7 @@ const ContributionCalendar = memo(function ContributionCalendar({
 }: {
   model: ContributionModel
   zoneLabel: string
-  weeklyObjectivesReachedPct: number
+  weeklyObjectivesReachedPct: number | null
   focusMinutesByDay: Record<string, number>
   onTip: (x: number, y: number, text: string) => void
   onTipClear: () => void
@@ -220,9 +221,11 @@ const ContributionCalendar = memo(function ContributionCalendar({
     <div className="contrib card">
       <div className="contrib__head">
         <span className="contrib__title">Focus days</span>
-        <span className="contrib__hint" title={`Calendar timezone: ${z}`}>
-          {weeklyObjectivesReachedPct}% of Weekly Objectives Reached
-        </span>
+        {weeklyObjectivesReachedPct !== null && (
+          <span className="contrib__hint" title={`Calendar timezone: ${z}`}>
+            {weeklyObjectivesReachedPct}% of objectives due this week reached
+          </span>
+        )}
       </div>
       <div className="contrib__scroll" ref={scrollRef} onPointerLeave={onTipClear}>
         <div className="contrib__heatmap">
@@ -829,8 +832,8 @@ export default function AnalyticsView() {
     [allSessions],
   )
   const weeklyObjectivesReachedPct = useMemo(
-    () => calcWeeklyObjectiveReachedPct(objectiveLogs, objectives, todayKey, tz),
-    [objectiveLogs, objectives, todayKey, tz],
+    () => calcWeeklyObjectiveReachedPct(objectiveLogs, objectives, todayKey),
+    [objectiveLogs, objectives, todayKey],
   )
 
   // This-week totals (Mon–Sun), from cross-period sessions so the week stays whole across a log roll.
@@ -939,22 +942,21 @@ export default function AnalyticsView() {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
+// Scored by deadline, not by check-ins made during the week: a monthly objective only enters the
+// week its period ends in, so its target is never measured against seven days.
 function calcWeeklyObjectiveReachedPct(
   objectiveLogs: ObjectiveLog[],
   objectives: Objective[],
   todayKey: string,
-  tz: string,
-): number {
-  const active = objectives.filter(o => !o.archived)
-  if (active.length === 0) return 0
+): number | null {
   const weekStart = startOfWeekMondayUtc(todayKey)
   const weekEnd = endOfWeekSundayUtc(todayKey)
-  const completions: Record<string, number> = {}
-  for (const row of objectiveLogs) {
-    const day = calendarDateKey(new Date(row.completedAt), tz)
-    if (day < weekStart || day > weekEnd) continue
-    completions[row.objectiveId] = (completions[row.objectiveId] ?? 0) + 1
-  }
-  const reached = active.filter(o => (completions[o.id] ?? 0) >= effectiveTargetCompletions(o)).length
-  return Math.round((reached / active.length) * 100)
+  const dueThisWeek = objectives.filter(o => {
+    if (o.archived) return false
+    const deadline = o.type === 'repeating' ? repeatingPeriodEndDate(o) : o.dueDate
+    return !!deadline && deadline >= weekStart && deadline <= weekEnd
+  })
+  if (dueThisWeek.length === 0) return null
+  const reached = dueThisWeek.filter(o => isObjectiveMet(o, countCompletions(o, objectiveLogs))).length
+  return Math.round((reached / dueThisWeek.length) * 100)
 }
