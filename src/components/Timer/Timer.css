@@ -160,5 +160,6 @@
   border-radius: var(--r-full);
   background: var(--success);
   box-shadow: 0 0 6px var(--success);
-  animation: pulse 2.5s ease-in-out infinite;
+  /* Finite on purpose: left running forever, this cost 4-5% of a core for as long as the window was open. */
+  animation: pulse 2.5s ease-in-out 4;
 }

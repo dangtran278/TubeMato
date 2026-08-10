@@ -58,13 +58,15 @@
       .widget__timer--break {
         color: #3aabe0;
       }
+      /* Finite on purpose: the widget is always-on-top, so neither Chromium's occlusion
+         cutoff nor the main window's animation gate can reach it, and this can run for hours. */
       .widget__timer--grace {
         color: #f87171;
-        animation: flash 0.8s infinite;
+        animation: flash 0.8s 8;
       }
       .widget__timer--procrastinating {
         color: #f87171;
-        animation: flash 1.4s infinite;
+        animation: flash 1.4s 6;
       }
       .widget__timer--idle {
         color: #55556a;
