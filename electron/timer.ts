@@ -25,6 +25,7 @@ export class TimerEngine {
   private interval: ReturnType<typeof setInterval> | null = null
   private graceInterval: ReturnType<typeof setInterval> | null = null
   private procrastinationInterval: ReturnType<typeof setInterval> | null = null
+  private graceStart: Date | null = null
   private procrastinationStart: Date | null = null
   private procrastinationNudgeSent = false
   /** Wall time when break ended (grace started); nudge fires `procrastinationNudgeSeconds` after this, not after grace + nudge. */
@@ -459,10 +460,24 @@ export class TimerEngine {
 
   // ─── Break completion & grace period ───────────────────────────────────────
 
+  /** Grace is overdue accounting, folded into the logged duration, so it reads the wall clock like the counter and nudge do. */
+  private graceSecondsLeftNow(): number {
+    if (!this.graceStart) return 0
+    return this.settings.procrastinationGrace
+      - Math.round((Date.now() - this.graceStart.getTime()) / 1000)
+  }
+
+  /** The instant grace runs out - when overdue time starts accruing, however late we notice. */
+  private graceExpiryMs(): number {
+    const start = this.graceStart ? this.graceStart.getTime() : Date.now()
+    return start + this.settings.procrastinationGrace * 1000
+  }
+
   private startGrace() {
     this.flushBreakExtensionIfFromBreak()
+    this.graceStart = new Date()
     this.session.state = 'grace'
-    this.session.graceSecondsLeft = this.settings.procrastinationGrace
+    this.session.graceSecondsLeft = Math.max(0, this.graceSecondsLeftNow())
     this.procrastinationNudgeEpochMs = Date.now()
     this.procrastinationNudgeSent = false
     // 'grace-start' = break is over, distinct alert sound (no music change; music already paused)
@@ -471,18 +486,22 @@ export class TimerEngine {
     this.maybeNotifyProcrastinationNudge()
 
     this.graceInterval = setInterval(() => {
-      this.session.graceSecondsLeft--
+      // Clamped for display; raw value drives the transition so a sleep outlasting grace can't flash negative.
+      const left = this.graceSecondsLeftNow()
+      this.session.graceSecondsLeft = Math.max(0, left)
       this.maybeNotifyProcrastinationNudge()
       this.onTick(this.getSession())
-      if (this.session.graceSecondsLeft <= 0) {
+      if (left <= 0) {
+        const expiredAt = new Date(this.graceExpiryMs())
         this.stopGrace()
-        this.beginProcrastination()
+        this.beginProcrastination(expiredAt)
       }
     }, 1000)
   }
 
   private stopGrace() {
     if (this.graceInterval) { clearInterval(this.graceInterval); this.graceInterval = null }
+    this.graceStart = null
   }
 
   private endBreak() {
@@ -513,17 +532,24 @@ export class TimerEngine {
 
   // ─── Procrastination ───────────────────────────────────────────────────────
 
-  private beginProcrastination() {
-    this.procrastinationStart = new Date()
+  /** Derives from Date.now() like the logged row and nudge do, so a stalled interval during sleep can't fall behind them. */
+  private procrastinationSecondsNow(): number {
+    if (!this.procrastinationStart) return 0
+    return Math.round((Date.now() - this.procrastinationStart.getTime()) / 1000)
+      + this.settings.procrastinationGrace
+  }
+
+  /** startedAt should be grace's true expiry, not now, or sleeping through grace's end gets silently forgiven. */
+  private beginProcrastination(startedAt: Date = new Date()) {
+    this.procrastinationStart = startedAt
     this.session.state = 'procrastinating'
-    // Start counting from the grace period duration (grace time counts as overdue)
-    this.session.procrastinationSeconds = this.settings.procrastinationGrace
+    this.session.procrastinationSeconds = this.procrastinationSecondsNow()
     this.onBell('overdue-start')
     this.onTick(this.getSession())
     this.maybeNotifyProcrastinationNudge()
 
     this.procrastinationInterval = setInterval(() => {
-      this.session.procrastinationSeconds++
+      this.session.procrastinationSeconds = this.procrastinationSecondsNow()
       this.maybeNotifyProcrastinationNudge()
       this.onTick(this.getSession())
     }, 1000)
@@ -550,8 +576,7 @@ export class TimerEngine {
       this.procrastinationInterval = null
     }
     if (!this.procrastinationStart) return
-    const durationSeconds = Math.round((Date.now() - this.procrastinationStart.getTime()) / 1000)
-      + this.settings.procrastinationGrace   // include grace time in logged duration
+    const durationSeconds = this.procrastinationSecondsNow()
     if (durationSeconds > 0) {
       this.deps.logProcrastination({ startAt: this.procrastinationStart.toISOString(), durationSeconds, date: this.logCalendarDate() })
     }

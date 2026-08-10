@@ -38,6 +38,13 @@ if (fs.existsSync(distDir)) {
   } catch {
     // ignore
   }
+
+  // emptyOutDir:false leaves every build's hashed bundles behind (25 orphans / 4.5 MB measured); vite build regenerates them right after.
+  safeRm(path.join(distDir, 'assets'))
+  safeRm(path.join(distDir, 'widget'))
+  safeRm(path.join(distDir, 'index.html'))
+  // A nested dist/dist with doubly-hashed names, from a build that took dist/ as its own input - not something vite build emits.
+  safeRm(path.join(distDir, 'dist'))
 }
 
-console.log('Pre-package clean finished (removed release/ + dist stray artifacts).')
+console.log('Pre-package clean finished (removed release/ + stale dist output).')

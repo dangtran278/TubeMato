@@ -867,3 +867,121 @@ describe('flushOnQuit reward/punish', () => {
     expect(extensions).toHaveLength(0)
   })
 })
+
+// ─── Procrastination counter ──────────────────────────────────────────────────
+
+type CapturedProc = { startAt: string; durationSeconds: number; date: string }
+
+/** Grace defaults to 1s so a run reaches 'procrastinating' in about three seconds. */
+function makeTimerProcrastinating(procEvents: CapturedProc[], graceSeconds = 1) {
+  const settings: Settings = {
+    ...DEFAULT_SETTINGS,
+    workDuration: 1,
+    shortBreakDuration: 1,
+    longBreakDuration: 1,
+    pomodorosBeforeLongBreak: 2,
+    procrastinationGrace: graceSeconds,
+  }
+  const deps: TimerDeps = {
+    getSettings: () => settings,
+    getObjectives: () => [],
+    logSession: () => {},
+    logBreakExtension: () => {},
+    logProcrastination: e => procEvents.push(e),
+    sendProcrastinationNotification: () => {},
+  }
+  const t = new TimerEngine(deps)
+  t.onTick = () => {}
+  t.onBell = () => {}
+  activeTimer = t
+  return t
+}
+
+async function runToProcrastinating(t: TimerEngine) {
+  t.start()
+  const deadline = Date.now() + 8000
+  while (t.getSession().state !== 'procrastinating') {
+    if (Date.now() > deadline) throw new Error(`stuck in ${t.getSession().state}`)
+    await wait(50)
+  }
+}
+
+/** Runs to the moment grace opens and returns the wall clock as it did (within one poll). */
+async function runToGrace(t: TimerEngine): Promise<number> {
+  t.start()
+  const deadline = Date.now() + 8000
+  while (t.getSession().state !== 'grace') {
+    if (Date.now() > deadline) throw new Error(`stuck in ${t.getSession().state}`)
+    await wait(50)
+  }
+  return Date.now()
+}
+
+describe('procrastination counter tracks the clock, not the tick count', () => {
+  // Sweeps the sleep gap rather than one value: the invariant is that the widget's read and the log's read never disagree.
+  for (const sleptMs of [0, 30_000, 5 * 60_000, 60 * 60_000, 9 * 60 * 60_000]) {
+    it(`agrees with the logged row across a ${sleptMs / 1000}s clock jump`, async () => {
+      const procEvents: CapturedProc[] = []
+      const t = makeTimerProcrastinating(procEvents)
+      await runToProcrastinating(t)
+
+      const realNow = Date.now
+      // Frozen, not offset, so the displayed read and the logged read share one instant and can be compared exactly.
+      const frozen = realNow() + sleptMs
+      Date.now = () => frozen
+      try {
+        await wait(1200)
+        const shown = t.getSession().procrastinationSeconds
+        t.reset()
+
+        expect(shown).toBeGreaterThanOrEqual(sleptMs / 1000)
+        expect(procEvents).toHaveLength(1)
+        expect(procEvents[0].durationSeconds).toBe(shown)
+      } finally {
+        Date.now = realNow
+      }
+    }, 15000)
+  }
+})
+
+describe('sleeping through the grace period', () => {
+  const GRACE = 4
+
+  // Grace is folded into the logged duration, so the model reduces to one invariant: overdue recorded == wall seconds since the break ended.
+  for (const sleptSec of [GRACE, GRACE + 1, 60, 3600, 8 * 3600]) {
+    it(`logs the full ${sleptSec}s as overdue when the sleep starts inside grace`, async () => {
+      const procEvents: CapturedProc[] = []
+      const t = makeTimerProcrastinating(procEvents, GRACE)
+      const graceOpenedAt = await runToGrace(t)
+
+      const realNow = Date.now
+      Date.now = () => graceOpenedAt + sleptSec * 1000
+      try {
+        await wait(1200)
+        expect(t.getSession().state).toBe('procrastinating')
+
+        t.reset()
+        expect(procEvents).toHaveLength(1)
+        expect(procEvents[0].durationSeconds).toBe(sleptSec)
+      } finally {
+        Date.now = realNow
+      }
+    }, 15000)
+  }
+
+  it('a sleep shorter than grace leaves you in grace with time still on it', async () => {
+    const procEvents: CapturedProc[] = []
+    const t = makeTimerProcrastinating(procEvents, GRACE)
+    const graceOpenedAt = await runToGrace(t)
+
+    const realNow = Date.now
+    Date.now = () => graceOpenedAt + (GRACE - 2) * 1000
+    try {
+      await wait(1200)
+      expect(t.getSession().state).toBe('grace')
+      expect(t.getSession().graceSecondsLeft).toBe(2)
+    } finally {
+      Date.now = realNow
+    }
+  }, 15000)
+})
