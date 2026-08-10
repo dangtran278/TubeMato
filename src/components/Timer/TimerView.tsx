@@ -65,7 +65,8 @@ function CircularProgress({ progress, state }: { progress: number; state: TimerS
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         transform="rotate(-90 140 140)"
-        style={{ filter: `drop-shadow(0 0 8px ${color})`, transition: 'stroke-dashoffset 1s linear' }}
+        // No stroke-dashoffset transition: retriggered every tick, measured at +4W while running.
+        style={{ filter: `drop-shadow(0 0 8px ${color})` }}
       />
     </svg>
   )
