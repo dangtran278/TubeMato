@@ -78,7 +78,6 @@ export default function ObjectiveReminderModal({ title, items, onClose }: Props)
                     </div>
                     <span className="reminder-row__score">
                       {it.completed}/{it.target}
-                      {it.debt > 0 && <span className="reminder-row__debt"> +{it.debt}</span>}
                     </span>
                   </span>
                 </div>

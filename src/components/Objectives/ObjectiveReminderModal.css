@@ -95,7 +95,6 @@
   font-size: 0.72rem;
   color: var(--text-muted);
 }
-.reminder-row__debt { color: var(--warning); }
 
 /* Flavor layer: muted, smaller, read only when a title catches the eye. */
 .reminder-row__roast {

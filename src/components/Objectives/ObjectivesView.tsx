@@ -25,6 +25,7 @@ import {
   isDeadlineMetaUrgent,
   objectiveHasCustomTimer,
   effectiveTargetCompletions,
+  hasOutstandingDebt,
   isObjectiveMet,
   objectiveDebt,
   objectivePrepaid,
@@ -915,16 +916,13 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
     praise: objectivePraiseLabel(copySeed, personality),
   }), [copySeed, debt, personality])
 
-  // Dual-segment bar: first segment is base completions, second is debt payoff.
   const baseTarget = objective.type === 'repeating' ? objective.targetCompletions : target
-  const baseBarPct = debt > 0
-    ? (Math.min(completions, baseTarget) / target) * 100
-    : Math.min(completions / target, 1) * 100
-  const debtBarPct = debt > 0
-    ? (Math.max(0, Math.min(completions - baseTarget, debt)) / target) * 100
-    : 0
-  // Split point as percentage of total bar width (where base ends / debt begins)
-  const splitPct = debt > 0 ? (baseTarget / target) * 100 : 100
+  // Live, not the stored `debt`, which only settles at rollover.
+  const owing = hasOutstandingDebt(objective, completions)
+  // Bar leads with the amber payoff segment while owing, so early check-ins visibly reduce it.
+  const splitPct = owing ? (debt / target) * 100 : 100
+  const debtBarPct = owing ? (Math.min(completions, debt) / target) * 100 : 0
+  const baseBarPct = owing ? 0 : Math.min(completions / target, 1) * 100
   // Extra completions beyond effective target (banked as prepaid for next period)
   const overdone = objective.type === 'repeating' ? Math.max(0, completions - target) : 0
 
@@ -986,7 +984,7 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
                 {cardCopy.overdue}
               </span>
             )}
-            {debt > 0 && (
+            {owing && (
               <span className="badge badge-debt">
                 {cardCopy.debt}
               </span>
@@ -1022,16 +1020,17 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
         <div className="objective-card__tail">
           <div className="objective-card__progress">
             <div
-              className={`progress-bar${debt > 0 ? ' progress-bar--split' : ''}`}
-              style={debt > 0 ? {
-                background: `linear-gradient(to right, var(--bg-overlay) ${splitPct}%, rgba(217,119,6,0.18) ${splitPct}%)`,
+              className={`progress-bar${owing ? ' progress-bar--split' : ''}`}
+              style={owing ? {
+                background: `linear-gradient(to right, rgba(217,119,6,0.18) ${splitPct}%, var(--bg-overlay) ${splitPct}%)`,
               } : undefined}
             >
-              <div className="progress-bar__fill progress-bar__fill--success"
-                style={{ width: `${baseBarPct}%` }} />
-              {debt > 0 && (
+              {owing ? (
                 <div className="progress-bar__fill progress-bar__fill--debt"
-                  style={{ left: `${splitPct}%`, width: `${debtBarPct}%` }} />
+                  style={{ width: `${debtBarPct}%` }} />
+              ) : (
+                <div className="progress-bar__fill progress-bar__fill--success"
+                  style={{ width: `${baseBarPct}%` }} />
               )}
             </div>
             <span className="objective-card__count">

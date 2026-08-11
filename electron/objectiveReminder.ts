@@ -118,7 +118,8 @@ export function selectReminderObjectives(
       objective: o,
       completed,
       target: effectiveTargetCompletions(o),
-      debt: objectiveDebt(o),
+      // Debt remaining right now, not the stored field, which only settles at rollover.
+      debt: Math.max(0, objectiveDebt(o) - completed),
       category,
       severity: CATEGORY_SEVERITY[category],
     }

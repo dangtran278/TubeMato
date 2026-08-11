@@ -17,6 +17,7 @@ export {
   addCalendarDays,
   calendarDaysDiff,
   effectiveTargetCompletions,
+  hasOutstandingDebt,
   isObjectiveMet,
   objectiveDebt,
   objectivePrepaid,
