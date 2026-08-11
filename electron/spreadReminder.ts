@@ -20,8 +20,9 @@ export function isSpreadCheckpointDay(o: Objective, today: string): boolean {
   const end = windowEnd(o)
   if (o.reminderMode !== 'spread' || !o.periodStart || !end) return false
   const elapsed = calendarDaysDiff(o.periodStart, today)
-  const interval = Math.floor(periodLengthDays(o) / effectiveTargetCompletions(o))
-  return interval > 0 && elapsed > 0 && elapsed % interval === 0
+  // floor() can hit 0 when the target exceeds the window length; interval must be at least 1.
+  const interval = Math.max(1, Math.floor(periodLengthDays(o) / effectiveTargetCompletions(o)))
+  return elapsed > 0 && elapsed % interval === 0
 }
 
 /** Linear pace: true when `completed` falls behind floor(need * elapsed / D) check-ins. */

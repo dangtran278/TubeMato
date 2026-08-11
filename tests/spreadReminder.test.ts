@@ -1,6 +1,7 @@
 ﻿/** spreadReminder: pure spread-mode checkpoint and pace functions. Real objective data, no mocks. */
 import { describe, it, expect } from 'vitest'
 import { isSpreadCheckpointDay, isSpreadBehindLinearPace } from '@electron/spreadReminder'
+import { addCalendarDays } from '@electron/objectiveDebt'
 import type { Objective } from '@electron/types'
 
 function makeSpreadObjective(overrides: Partial<Objective> = {}): Objective {
@@ -57,6 +58,33 @@ describe('isSpreadCheckpointDay', () => {
   it('returns false when periodStart is missing', () => {
     const o = makeSpreadObjective({ periodStart: undefined })
     expect(isSpreadCheckpointDay(o, '2026-06-11')).toBe(false)
+  })
+
+  // Cadence is floor(windowDays / target), which floors to 0 once target exceeds the window.
+  describe('cadence never thins out as the target grows', () => {
+    const START = '2026-06-09'
+    const LAST_ELAPSED = 6 // daily/interval-7 recurrence → window is 2026-06-09 … 2026-06-15
+
+    const checkpointCount = (targetCompletions: number) => {
+      const o = makeSpreadObjective({ targetCompletions })
+      let n = 0
+      for (let elapsed = 1; elapsed <= LAST_ELAPSED; elapsed++) {
+        if (isSpreadCheckpointDay(o, addCalendarDays(START, elapsed))) n++
+      }
+      return n
+    }
+
+    it('fires every day once the target reaches the window length', () => {
+      for (const target of [7, 8, 12, 40]) {
+        expect(checkpointCount(target)).toBe(LAST_ELAPSED)
+      }
+    })
+
+    it('is monotonic: more required check-ins never means fewer checkpoints', () => {
+      for (let target = 2; target <= 40; target++) {
+        expect(checkpointCount(target)).toBeGreaterThanOrEqual(checkpointCount(target - 1))
+      }
+    })
   })
 })
 
