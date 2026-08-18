@@ -77,6 +77,7 @@ export function objectiveReminderBody(
       `${score}. If task avoidance were an Olympic sport, this sequence would win gold.`,
       `${score}. You've kept the objective waiting. Who's next? Your boss? Your best friend? Your future self?`,
       `${score}. Dear diary, my darling is ignoring me. AGAIN.`,
+      `${score}. My disappointment is immeasurable and my day is ruined.`,
     ]), debt)
   }
 
@@ -593,8 +594,9 @@ export function focusTooltip(
 
 // ─── Objective card badges ───────────────────────────────────────────────────
 
-export function badgeDebtTitle(seed: string, personality: Personality = 'passive-aggressive'): string {
-  if (personality === 'calm') return `Check-ins carried over from a missed deadline.`
+/** Undefined in calm mode: the badge already states the fact, and calm has no joke to add. */
+export function badgeDebtTitle(seed: string, personality: Personality = 'passive-aggressive'): string | undefined {
+  if (personality === 'calm') return undefined
   const items = [
     `Past check-ins you skipped. They didn't disappear. They're just waiting.`,
     `Past you skipped a deadline. Present you has company.`,
@@ -604,8 +606,26 @@ export function badgeDebtTitle(seed: string, personality: Personality = 'passive
     `A deadline ended without these. They took it personally.`,
     `The physical manifestation of 'I'll do it tomorrow.'`,
     `Yesterday's shortcut, compounding into today's tax.`,
+    `Check-ins missed! I guess you'll do just fine with having an hour of oxygen today.`,
   ]
   return stablePick(items, `badge-debt-title-${seed}`)
+}
+
+/** One-time only: the joke is stasis, not debt's accrual. */
+export function badgeOverdueTitle(seed: string, personality: Personality = 'passive-aggressive'): string | undefined {
+  if (personality === 'calm') return undefined
+  const items = [
+    `Staring at it doesn't make it done.`,
+    `This deadline died a while ago.`,
+    `A moment of silence for this deadline.`,
+    `Aging like milk on your schedule.`,
+    `Overdue. But we both saw that coming.`,
+    `Inspecting your failures up close, are we?`,
+    `It's been waiting so long it's eligible for pension.`,
+    `Added to your growing collection of 'later'.`,
+    `Your past self made a promise present self ignored.`,
+  ]
+  return stablePick(items, `badge-overdue-title-${seed}`)
 }
 
 export function bankAnotherLabel(seed: string, personality: Personality = 'passive-aggressive'): string {
@@ -689,6 +709,7 @@ export function objectivesEmptyLine(seed: string, personality: Personality = 'pa
     `A pristine wilderness of zero ambition. Add a target before your willpower completely atrophies.`,
     `No objectives set. You can't miss a target if you don't have one, can you? Adorable strategy.`,
     `A beautifully blank canvas of absolute avoidance. Give us something to track.`,
+    `Bored? Me too bro, let's hang out.`,
   ]
   return stablePick(items, `objectives-empty-${seed}`)
 }
@@ -820,6 +841,7 @@ export function scheduleAlertBody(
       `Your work is here. Stop negotiating with yourself, click start, and pretend to be a well-adjusted adult.`,
       `The clock is running on your promise. Click start to convince me you actually meant it.`,
       `This is the exact window you locked in. Put down the distraction and hit start before the guilt hits.`,
+      `You were expecting a social media notification, but it was me, TubeMato! Hit start.`,
     ], `schedule-alert-now-${seed}`)
   }
   if (personality === 'calm') return `Starts ${alertLeadLabel(offsetMinutes)} at ${startTime}. Click to start now.`

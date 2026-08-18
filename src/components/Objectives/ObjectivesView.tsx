@@ -39,6 +39,7 @@ import {
 import { formatIsoDateDdMmYyyy } from '../../utils/dateDisplay'
 import {
   badgeDebtTitle,
+  badgeOverdueTitle,
   markDoneLabel,
   bankAnotherLabel,
   objectivePraiseLabel,
@@ -894,6 +895,7 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
   onEdit: () => void
   onDelete: () => void
 }) {
+  const cardRef = useRef<HTMLDivElement>(null)
   const target = effectiveTargetCompletions(objective)
   const debt = objectiveDebt(objective)
   const prepaid = objectivePrepaid(objective)
@@ -911,6 +913,7 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
     debt: badgeDebt(debt),
     behind: badgeBehind(),
     debtTitle: badgeDebtTitle(copySeed, personality),
+    overdueTitle: badgeOverdueTitle(copySeed, personality),
     markDone: markDoneLabel(copySeed, personality),
     bankAnother: bankAnotherLabel(copySeed, personality),
     praise: objectivePraiseLabel(copySeed, personality),
@@ -928,6 +931,7 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
 
   return (
     <div
+      ref={cardRef}
       className={`objective-card card ${met ? 'objective-card--met' : ''} ${toneClass(tone)} ${isSelected ? 'objective-card--selected' : ''}`}
       onClick={onSelect}
       role="button"
@@ -980,14 +984,18 @@ function ObjectiveCard({ objective, completions, tone, personality, focusMinutes
               </span>
             )}
             {tone === 'one-time-overdue' && (
-              <span className="badge badge-ominous">
-                {cardCopy.overdue}
-              </span>
+              <Tooltip label={cardCopy.overdueTitle} anchorTo={cardRef} wrap capWidth>
+                <span className="badge badge-ominous">
+                  {cardCopy.overdue}
+                </span>
+              </Tooltip>
             )}
             {owing && (
-              <span className="badge badge-debt">
-                {cardCopy.debt}
-              </span>
+              <Tooltip label={cardCopy.debtTitle} anchorTo={cardRef} wrap capWidth>
+                <span className="badge badge-debt">
+                  {cardCopy.debt}
+                </span>
+              </Tooltip>
             )}
             {behind && (
               <span className="badge badge-behind">
