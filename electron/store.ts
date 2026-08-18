@@ -74,6 +74,13 @@ export const store = new Store<StoreSchema>({
   },
 })
 
+// `defaults` only fills keys absent from the whole object, so settings saved by an older version
+// keep reading `undefined` for every key added since. Backfill once so every read sees them all.
+const storedSettings = store.get('settings')
+if (Object.keys(DEFAULT_SETTINGS).some(k => !(k in storedSettings))) {
+  store.set('settings', { ...DEFAULT_SETTINGS, ...storedSettings })
+}
+
 // ─── Log file helpers ─────────────────────────────────────────────────────────
 
 function getLogsDir(): string {

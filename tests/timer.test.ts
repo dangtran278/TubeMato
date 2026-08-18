@@ -873,7 +873,11 @@ describe('flushOnQuit reward/punish', () => {
 type CapturedProc = { startAt: string; durationSeconds: number; date: string }
 
 /** Grace defaults to 1s so a run reaches 'procrastinating' in about three seconds. */
-function makeTimerProcrastinating(procEvents: CapturedProc[], graceSeconds = 1) {
+function makeTimerProcrastinating(
+  procEvents: CapturedProc[],
+  graceSeconds = 1,
+  extra: { onNudge?: () => void; settings?: Partial<Settings> } = {},
+) {
   const settings: Settings = {
     ...DEFAULT_SETTINGS,
     workDuration: 1,
@@ -881,6 +885,7 @@ function makeTimerProcrastinating(procEvents: CapturedProc[], graceSeconds = 1) 
     longBreakDuration: 1,
     pomodorosBeforeLongBreak: 2,
     procrastinationGrace: graceSeconds,
+    ...extra.settings,
   }
   const deps: TimerDeps = {
     getSettings: () => settings,
@@ -888,7 +893,7 @@ function makeTimerProcrastinating(procEvents: CapturedProc[], graceSeconds = 1) 
     logSession: () => {},
     logBreakExtension: () => {},
     logProcrastination: e => procEvents.push(e),
-    sendProcrastinationNotification: () => {},
+    sendProcrastinationNotification: extra.onNudge ?? (() => {}),
   }
   const t = new TimerEngine(deps)
   t.onTick = () => {}
@@ -942,6 +947,83 @@ describe('procrastination counter tracks the clock, not the tick count', () => {
       }
     }, 15000)
   }
+})
+
+// ─── Overdue with nobody watching ─────────────────────────────────────────────
+
+/** Overdue accounting must be identical whether or not anyone was watching, since the pulse can
+ *  stay parked for days - sweep the same clock jumps the observed case sweeps. */
+describe('overdue accounting is identical while unobserved', () => {
+  for (const sleptMs of [0, 30_000, 5 * 60_000, 60 * 60_000, 9 * 60 * 60_000]) {
+    it(`agrees with the logged row across a ${sleptMs / 1000}s jump with no window up`, async () => {
+      const procEvents: CapturedProc[] = []
+      const t = makeTimerProcrastinating(procEvents)
+      await runToProcrastinating(t)
+
+      let ticks = 0
+      t.setObserved(false)
+      t.onTick = () => { ticks++ }   // attached after, so the transition's own tick isn't counted
+
+      const realNow = Date.now
+      const frozen = realNow() + sleptMs
+      Date.now = () => frozen
+      try {
+        await wait(1200)
+        expect(ticks).toBe(0)        // no pulse while unobserved
+
+        const shown = t.getSession().procrastinationSeconds
+        t.reset()
+
+        expect(shown).toBeGreaterThanOrEqual(sleptMs / 1000)
+        expect(procEvents).toHaveLength(1)
+        expect(procEvents[0].durationSeconds).toBe(shown)
+      } finally {
+        Date.now = realNow
+      }
+    }, 15000)
+  }
+
+  it('pushes the true count the instant a window comes back', async () => {
+    const procEvents: CapturedProc[] = []
+    const t = makeTimerProcrastinating(procEvents)
+    await runToProcrastinating(t)
+    t.setObserved(false)
+
+    const seen: number[] = []
+    t.onTick = s => { seen.push(s.procrastinationSeconds) }
+
+    const realNow = Date.now
+    Date.now = () => realNow() + 3 * 60 * 60_000
+    try {
+      await wait(300)
+      expect(seen).toHaveLength(0)
+
+      t.setObserved(true)
+      // One tick immediately, carrying real elapsed time - not whatever the pulse last wrote
+      // three hours ago, which is what the window would otherwise paint for up to a second.
+      expect(seen.length).toBeGreaterThanOrEqual(1)
+      expect(seen[0]).toBeGreaterThanOrEqual(3 * 60 * 60)
+    } finally {
+      Date.now = realNow
+      t.reset()
+    }
+  }, 15000)
+
+  it('still fires the nudge at its due moment with no window up', async () => {
+    const procEvents: CapturedProc[] = []
+    let nudges = 0
+    const t = makeTimerProcrastinating(procEvents, 1, {
+      onNudge: () => { nudges++ },
+      settings: { notifyProcrastinationNudge: true, procrastinationNudgeSeconds: 3 },
+    })
+    await runToProcrastinating(t)
+    t.setObserved(false)
+    // Nudge is due 3s after the break ended, ~2s from here: the parked pulse must not swallow it.
+    expect(nudges).toBe(0)
+    await wait(4000)
+    expect(nudges).toBe(1)
+    t.reset()
+  }, 15000)
 })
 
 describe('sleeping through the grace period', () => {

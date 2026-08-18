@@ -330,6 +330,7 @@ function createMainWindow() {
   // while the app lives on in the tray. Recreated on demand (tray click / widget timer click).
   mainWindow.on('closed', () => {
     mainWindow = null
+    syncTimerObserved()
     if (isQuitting) return   // app is exiting; don't resurrect the widget
     // Guarantee a bell-capable renderer stays alive: the widget owns audio now,
     // so create it (hidden if disabled in settings) if it doesn't exist yet.
@@ -347,9 +348,16 @@ function createMainWindow() {
 
   // Ticks are skipped while hidden or minimized, so push the current session when the window comes
   // back. Both events are needed: minimize/restore doesn't reliably fire 'show' on Windows.
-  const resync = () => mainWindow?.webContents.send(IPC.TIMER_TICK, timer.getSession())
+  const resync = () => {
+    syncTimerObserved()
+    mainWindow?.webContents.send(IPC.TIMER_TICK, timer.getSession())
+  }
   mainWindow.on('show', resync)
   mainWindow.on('restore', resync)
+  // The engine parks its overdue pulse when no window is on screen, so leaving has to be reported
+  // as precisely as coming back. isVisible() is already false by the time either of these fires.
+  mainWindow.on('hide', syncTimerObserved)
+  mainWindow.on('minimize', syncTimerObserved)
 }
 
 // ─── Mini widget window ───────────────────────────────────────────────────────
@@ -415,10 +423,11 @@ function createWidgetWindow() {
     // Re-assert topmost + skipTaskbar after show: on Windows, alwaysOnTop resets skipTaskbar.
     reassertWidgetTopmost(widgetWindow)
     startWidgetTopmostPoll()   // only poll for fullscreen-demotion while the widget is visible
+    syncTimerObserved()
     widgetWindow?.webContents.send(IPC.TIMER_TICK, timer.getSession())
   })
   // Nothing to keep on top once hidden; stop the heartbeat so an idle app doesn't wake every second.
-  widgetWindow.on('hide', stopWidgetTopmostPoll)
+  widgetWindow.on('hide', () => { stopWidgetTopmostPoll(); syncTimerObserved() })
 
   // The widget owns bell audio, so it must survive the OS system menu's "Close" (reachable by
   // right-clicking the drag region), which would otherwise destroy it and leave nothing to ring.
@@ -430,7 +439,7 @@ function createWidgetWindow() {
     store.set('settings', { ...settings, showMiniWidget: false })
     invalidateTray()
   })
-  widgetWindow.on('closed', () => { widgetWindow = null; stopWidgetTopmostPoll() })
+  widgetWindow.on('closed', () => { widgetWindow = null; stopWidgetTopmostPoll(); syncTimerObserved() })
 
   // Start the heartbeat for the visible case directly (don't rely on the auto-show event firing);
   // startWidgetTopmostPoll is idempotent, so a later 'show' event won't double it.
@@ -439,10 +448,14 @@ function createWidgetWindow() {
 }
 
 // The fullscreen-demotion case (a fullscreen video shoving the widget behind it) fires no OS
-// event, so the only way to catch it is to re-assert topmost on a 1s heartbeat. That heartbeat
+// event, so the only way to catch it is to re-assert topmost on a heartbeat. That heartbeat
 // runs ONLY while the widget is visible; there's nothing to keep on top when it's hidden, so an
 // idle app with the widget off no longer wakes every second. Started/stopped by the widget's
 // show/hide events (see createWidgetWindow).
+//
+// 5s, not 1s: an eventless demotion is now caught within 5s instead of 1; the evented cases
+// (display change, resume, unlock, widget's own show) are unaffected - they reassert immediately.
+const WIDGET_TOPMOST_POLL_MS = 5000
 let widgetTopmostTimer: ReturnType<typeof setInterval> | null = null
 
 /** True for the life of the widget's context menu; see the WIDGET_CONTEXT_MENU handler. */
@@ -455,7 +468,7 @@ function startWidgetTopmostPoll() {
     // menu, and setAlwaysOnTop also resets skipTaskbar as a side effect (widgetTopmost.ts).
     if (widgetMenuOpen) return
     reassertWidgetTopmost(widgetWindow)
-  }, 1000)
+  }, WIDGET_TOPMOST_POLL_MS)
 }
 
 function stopWidgetTopmostPoll() {
@@ -905,12 +918,12 @@ function pruneExpiredEventCards() {
   }
 }
 
-// Fullscreen-demotion + skipTaskbar guard for the overlay, mirroring the widget's: a 1s heartbeat
-// that runs only while cards are on screen (nothing to keep on top when hidden).
+// Fullscreen-demotion guard for the overlay, mirroring the widget's: runs only while cards are on
+// screen, since event cards can stay up for the length of a schedule block.
 let notifTopmostTimer: ReturnType<typeof setInterval> | null = null
 function startNotifTopmostPoll() {
   if (notifTopmostTimer) return
-  notifTopmostTimer = setInterval(() => reassertWidgetTopmost(notificationsWindow), 1000)
+  notifTopmostTimer = setInterval(() => reassertWidgetTopmost(notificationsWindow), WIDGET_TOPMOST_POLL_MS)
 }
 function stopNotifTopmostPoll() {
   if (notifTopmostTimer) { clearInterval(notifTopmostTimer); notifTopmostTimer = null }
@@ -1098,7 +1111,18 @@ function musicPlayFor(phase: 'work' | 'break'): boolean {
   return phase === 'work' ? playOnWork(s, obj) : playOnBreak(s, obj)
 }
 
+/** onTick's sends are gated on exactly this, so when it's false the engine's 1Hz overdue pulse
+ *  has no consumer left and parks itself (see TimerEngine.setObserved). */
+function syncTimerObserved() {
+  const mainUp = !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()
+  const widgetUp = !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()
+  timer.setObserved(mainUp || widgetUp)
+}
+
 function startTimerBroadcast() {
+  // The engine defaults to observed; correct it once at startup so launching straight to the tray
+  // (autoLaunch, widget off) never runs a pulse nobody asked for.
+  syncTimerObserved()
   timer.onTick = session => {
     // Don't wake hidden renderers every second; they re-sync via the show/restore handlers.
     if (mainWindow?.isVisible()) {

@@ -48,6 +48,11 @@ export class TimerEngine {
   private workNominalTotalSeconds = 0
   /** One-shot guard so flushOnQuit logs at most once, whichever quit path fires it. */
   private didQuitFlush = false
+  /** Whether any window is on screen to receive ticks. Defaults true so a standalone engine
+   *  behaves exactly as it always has; main.ts drives it from window visibility. */
+  private observed = true
+  /** Stands in for the 1Hz pulse while unobserved: the nudge is one dated event, not a poll. */
+  private nudgeTimeout: ReturnType<typeof setTimeout> | null = null
 
   public onTick: TickCallback = () => {}
   public onBell: BellCallback = () => {}
@@ -102,7 +107,25 @@ export class TimerEngine {
   getSession(): TimerSession {
     // Resolve the effective long-break interval for the active objective on the way out, so every
     // broadcast/consumer sees the per-objective override (or the global default) as one value.
-    return { ...this.session, pomodorosBeforeLongBreak: this.resolveObjectiveDurations(this.session.activeObjectiveId).longEvery }
+    const out: TimerSession = { ...this.session, pomodorosBeforeLongBreak: this.resolveObjectiveDurations(this.session.activeObjectiveId).longEvery }
+    // Read the wall-clock counters rather than trust `this.session`'s copy: while unobserved the
+    // overdue pulse is parked (see applyProcrastinationCadence), so it can be hours stale.
+    if (out.state === 'procrastinating') out.procrastinationSeconds = this.procrastinationSecondsNow()
+    if (out.state === 'grace') out.graceSecondsLeft = Math.max(0, this.graceSecondsLeftNow())
+    return out
+  }
+
+  /** No window on screen means the 1Hz pulse has no consumer, so park it outright rather than
+   *  just slow it - overdue is unbounded and this can otherwise run for days unwatched. */
+  setObserved(observed: boolean) {
+    if (observed === this.observed) return
+    this.observed = observed
+    this.applyProcrastinationCadence()
+    // Push the true count immediately rather than let the window paint a stale one for a second.
+    if (observed && this.session.state === 'procrastinating') {
+      this.session.procrastinationSeconds = this.procrastinationSecondsNow()
+      this.onTick(this.getSession())
+    }
   }
 
   reloadSettings() {
@@ -547,12 +570,43 @@ export class TimerEngine {
     this.onBell('overdue-start')
     this.onTick(this.getSession())
     this.maybeNotifyProcrastinationNudge()
+    this.applyProcrastinationCadence()
+  }
 
-    this.procrastinationInterval = setInterval(() => {
-      this.session.procrastinationSeconds = this.procrastinationSecondsNow()
+  /** Runs the 1Hz overdue pulse only while a window can see it; otherwise arms the nudge alone. */
+  private applyProcrastinationCadence() {
+    if (this.procrastinationInterval) { clearInterval(this.procrastinationInterval); this.procrastinationInterval = null }
+    if (this.nudgeTimeout) { clearTimeout(this.nudgeTimeout); this.nudgeTimeout = null }
+    if (this.session.state !== 'procrastinating') return
+
+    if (this.observed) {
+      this.procrastinationInterval = setInterval(() => {
+        this.session.procrastinationSeconds = this.procrastinationSecondsNow()
+        this.maybeNotifyProcrastinationNudge()
+        this.onTick(this.getSession())
+      }, 1000)
+      return
+    }
+    this.armNudgeTimeout()
+  }
+
+  /** The one thing an unobserved overdue period still owes: fire the nudge at its due moment. */
+  private armNudgeTimeout() {
+    if (this.procrastinationNudgeSent) return
+    if (this.procrastinationNudgeEpochMs == null) return
+    if (this.settings.notifyProcrastinationNudge === false) return
+    const threshold = Math.max(0, this.settings.procrastinationNudgeSeconds ?? 300)
+    const dueInMs = this.procrastinationNudgeEpochMs + threshold * 1000 - Date.now()
+    // setTimeout saturates at ~24.8 days and then fires immediately, which would deliver the nudge
+    // early rather than late. Clamp and re-arm instead.
+    const MAX_TIMEOUT_MS = 2_147_483_647
+    this.nudgeTimeout = setTimeout(() => {
+      this.nudgeTimeout = null
       this.maybeNotifyProcrastinationNudge()
-      this.onTick(this.getSession())
-    }, 1000)
+      if (!this.procrastinationNudgeSent && !this.observed && this.session.state === 'procrastinating') {
+        this.armNudgeTimeout()
+      }
+    }, Math.min(Math.max(0, dueInMs), MAX_TIMEOUT_MS))
   }
 
   /** Wall seconds since break ended (grace started). Matches "Procrastination nudge" input alone, not grace + nudge. */
@@ -575,6 +629,7 @@ export class TimerEngine {
       clearInterval(this.procrastinationInterval)
       this.procrastinationInterval = null
     }
+    if (this.nudgeTimeout) { clearTimeout(this.nudgeTimeout); this.nudgeTimeout = null }
     if (!this.procrastinationStart) return
     const durationSeconds = this.procrastinationSecondsNow()
     if (durationSeconds > 0) {
