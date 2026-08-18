@@ -64,7 +64,9 @@
           console.warn('[TubeMato] Extension reloaded; reload this YouTube tab to reconnect.')
           return
         }
-        setTimeout(connect, 1200)
+        // Reconnect through the guard, not straight into connect(): by the time this fires the
+        // tab may have navigated off the player.
+        setTimeout(syncConnection, 1200)
       })
 
       // Keep the port warm so the worker doesn't consider us gone.
@@ -82,8 +84,29 @@
         console.warn('[TubeMato] Extension reloaded; reload this YouTube tab to reconnect.')
         return
       }
-      setTimeout(connect, 3000)
+      setTimeout(syncConnection, 3000)
     }
+  }
+
+  function disconnectPort () {
+    if (!port) return
+    // Our own disconnect() does not fire our onDisconnect listener (only the worker's), so the
+    // reconnect timer that listener schedules can't fire; tear the state down by hand.
+    try { port.disconnect() } catch (e) { /* already gone */ }
+    clearInterval(pingTimer)
+    pingTimer = null
+    port = null
+    lastControllable = null
+    lastSentTitle = null
+  }
+
+  // A connected port keeps the MV3 worker resident even on tabs it will never treat as
+  // controllable (home/search/Shorts), so hold one only on pages isPlayerPage() actually drives.
+  // (Matching the manifest to /watch instead won't work: YouTube's SPA nav never reloads the
+  // document, so a /watch-only script would never get injected navigating in from the homepage.)
+  function syncConnection () {
+    if (isPlayerPage()) { if (!port) connect() }
+    else if (port) disconnectPort()
   }
 
   function post (msg) {
@@ -270,9 +293,11 @@
     reportFocus()
     fulfillPendingPlay()
   })
-  document.addEventListener('yt-navigate-finish', reportControllable)
-  // Safety-net poll: cheap (deduped) and catches any missed transition.
-  setInterval(reportControllable, 2000)
+  document.addEventListener('yt-navigate-finish', function () { syncConnection(); reportControllable() })
+  // Safety-net poll: cheap (deduped) and catches any missed transition. It also drives the
+  // connection, so a missed yt-navigate-finish costs a 2s delay in becoming targetable rather
+  // than leaving the tab permanently disconnected.
+  setInterval(function () { syncConnection(); reportControllable() }, 2000)
 
   // ─── Title tracking (labels in the app's tab picker) ────────────────────────
 
@@ -311,5 +336,5 @@
   setInterval(sendTitleUpdate, 2000) // deduped safety net
 
   // ─── Go ──────────────────────────────────────────────────────────────────────
-  connect()
+  syncConnection()
 })()

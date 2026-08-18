@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TubeMato Bridge",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Controls YouTube playback in sync with the TubeMato Pomodoro timer.",
 
   "background": {
