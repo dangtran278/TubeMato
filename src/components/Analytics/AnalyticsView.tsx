@@ -814,13 +814,14 @@ export default function AnalyticsView() {
   // (authoritative for recent days). Both streaks read this one map.
   const { streak, longestStreak, longestStreakRange } = useMemo(() => {
     const counts = { ...dailyCounts, ...buildPomodoroCountByDay(allSessions) }
-    const best = longestStreakRangeFromCounts(counts, settings.streakThreshold)
+    const countWeekends = settings.streakCountsWeekends ?? false
+    const best = longestStreakRangeFromCounts(counts, settings.streakThreshold, countWeekends)
     return {
-      streak: currentStreakFromCounts(counts, settings.streakThreshold, todayKey),
+      streak: currentStreakFromCounts(counts, settings.streakThreshold, todayKey, countWeekends),
       longestStreak: best?.length ?? 0,
       longestStreakRange: best,
     }
-  }, [dailyCounts, allSessions, settings.streakThreshold, todayKey])
+  }, [dailyCounts, allSessions, settings.streakThreshold, settings.streakCountsWeekends, todayKey])
 
   const contribModel = useMemo(
     () => buildContributionModel(allSessions, todayKey),

@@ -290,6 +290,12 @@ export default function SettingsView() {
           )}>
             <NumInput value={local.streakThreshold} min={1} max={MAX_DAY_COUNT} onChange={v => patch({ streakThreshold: v })} />
           </Row>
+          <Row label="Reset on missed weekends" hint={hint(
+            'Resets your streak on missed weekends. Disable to protect your streak while resting.',
+            'Resets your streak on missed weekends. Disable to give your laziness an immunity pass.',
+          )}>
+            <Toggle value={local.streakCountsWeekends ?? false} onChange={v => patch({ streakCountsWeekends: v })} />
+          </Row>
         </Section>
 
         <Section title="📅 Calendar & scheduling">

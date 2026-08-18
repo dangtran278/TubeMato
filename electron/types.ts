@@ -74,6 +74,9 @@ export interface Settings {
   mainWindowMaximized: boolean
   showMiniWidget: boolean
   streakThreshold: number         // pomodoros/day to count as streak day
+  /** Weekends can break a streak like any other day. Off: a rested Sat/Sun is skipped, so Friday's
+   *  run carries into Monday. A worked weekend always counts either way. */
+  streakCountsWeekends: boolean
   /** Default for new repeating objectives: carry missed completions forward as debt. Each objective
    *  can override via its own `carryDebt`. */
   carryDebt: boolean
@@ -154,6 +157,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mainWindowMaximized: false,
   showMiniWidget: true,
   streakThreshold: 4,
+  streakCountsWeekends: false,
   carryDebt: true,
   carryPrepaid: true,
   bellVolume: 100,

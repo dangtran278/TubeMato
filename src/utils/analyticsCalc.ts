@@ -1,5 +1,8 @@
 import { addCalendarDays } from '@electron/objectiveDebt'
 import { countsAsFinishedPomodoro } from '@electron/sessionFilters'
+import { isWeekday } from '@electron/streakCalc'
+
+export { isWeekday }
 
 export const BAR_CHART_DAYS = 14
 export const CONTRIB_WEEK_COLUMNS = 53
@@ -197,12 +200,6 @@ export function niceTimeAxis(maxValue: number, maxTicks = 4): { axisMax: number;
 // Never the full log history: prime time is a "who are you lately" signal, not a lifetime archive.
 export const PRIME_TIME_WINDOWS = [21, 42, 90]
 export const PRIME_TIME_MIN_SESSIONS = 12
-
-/** True if the local calendar day (YYYY-MM-DD) is Mon–Fri. */
-export function isWeekday(dateKey: string): boolean {
-  const dow = new Date(dateKey + 'T12:00:00.000Z').getUTCDay() // 0=Sun … 6=Sat
-  return dow >= 1 && dow <= 5
-}
 
 /**
  * Sessions to base prime time on: a recent rolling window ending `todayKey`, optionally weekdays-only,
