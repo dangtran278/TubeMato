@@ -78,6 +78,9 @@
   /* Sidebar */
   --sidebar-w: 64px;
 
+  /* Titlebar */
+  --titlebar-h: 32px;
+
   /* Transitions */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-fast: 120ms;
@@ -190,7 +193,7 @@ a { color: inherit; text-decoration: none; }
 .titlebar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 32px;
+  height: var(--titlebar-h);
   -webkit-app-region: drag;
   z-index: 1000;
   display: flex;
@@ -214,20 +217,41 @@ a { color: inherit; text-decoration: none; }
 .titlebar__controls {
   -webkit-app-region: no-drag;
   display: flex;
-  gap: var(--sp-1);
+  /* Buttons carry their own padding instead, so no-drag covers the strip with no dead gaps. */
+  gap: 0;
+  /* Cancel the titlebar's padding: close should reach the corner, the easiest target when maximized. */
+  margin-right: calc(var(--sp-3) * -1);
   position: relative;
   z-index: 1;
+  align-self: stretch;
 }
+/* Electron's drag region follows layout boxes, not pointer reach, so this is a full-height rect in flow. */
 .titlebar__btn {
-  width: 24px; height: 24px;
-  border-radius: var(--r-full);
+  position: relative;
+  width: calc(24px + var(--sp-1));
+  align-self: stretch;
   display: flex; align-items: center; justify-content: center;
   font-size: 10px;
-  transition: background var(--dur-fast) var(--ease);
   color: var(--text-muted);
 }
-.titlebar__btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
-.titlebar__btn--close:hover { background: var(--danger); color: var(--text-inverse); }
+.titlebar__btn::before {
+  content: '';
+  position: absolute;
+  width: 24px; height: 24px;
+  border-radius: var(--r-full);
+  /* Behind the glyph, but still above .titlebar__controls' (transparent) background. */
+  z-index: -1;
+  transition: background var(--dur-fast) var(--ease);
+}
+/* Keeps the circle off the window edge while its hit box still runs to the corner. */
+.titlebar__btn--close {
+  width: calc(24px + var(--sp-1) * 2);
+  padding-right: var(--sp-1);
+}
+.titlebar__btn:hover { color: var(--text-primary); }
+.titlebar__btn:hover::before { background: var(--bg-overlay); }
+.titlebar__btn--close:hover { color: var(--text-inverse); }
+.titlebar__btn--close:hover::before { background: var(--danger); }
 
 /* ─── Sidebar Navigation ─────────────────────────────────────────────────────── */
 .sidebar {
