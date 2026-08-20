@@ -72,30 +72,6 @@ describe('objectiveCadenceNudge', () => {
   })
 })
 
-// ─── objectiveReminderBody (passive-aggressive): debt must never be silently dropped ─────────
-
-describe('objectiveReminderBody debt note (passive-aggressive)', () => {
-  it('mentions carried-over debt even at zero progress (completed === 0 branch)', () => {
-    const out = objectiveReminderBody(0, 5, 2)
-    expect(out).toContain('2 check-ins carried over from last time')
-  })
-
-  it('mentions carried-over debt even when almost done (remaining <= 2 branch)', () => {
-    const out = objectiveReminderBody(4, 5, 1)
-    expect(out).toContain('1 check-in carried over from last time')
-  })
-
-  it('mentions carried-over debt in the low-progress branch (pct < 35)', () => {
-    const out = objectiveReminderBody(1, 10, 3)
-    expect(out).toContain('3 check-ins carried over from last time')
-  })
-
-  it('adds nothing extra when there is no debt', () => {
-    const out = objectiveReminderBody(0, 5, 0)
-    expect(out).not.toContain('carried over')
-  })
-})
-
 // ─── dailySummaryNotificationBody ────────────────────────────────────────────
 
 describe('dailySummaryNotificationBody', () => {

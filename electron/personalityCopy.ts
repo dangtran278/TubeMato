@@ -39,12 +39,6 @@ function remainingLabel(n: number): string {
   return n === 1 ? '1 check-in left' : `${n} check-ins left`
 }
 
-/** PA's non-debt pools never mention debt themselves; append it so it isn't silently dropped. */
-function withDebtNote(line: string, debt: number): string {
-  if (debt <= 0) return line
-  return `${line} Also: ${debt} check-in${debt === 1 ? '' : 's'} carried over from last time.`
-}
-
 export function objectiveReminderBody(
   completed: number,
   target: number,
@@ -64,7 +58,7 @@ export function objectiveReminderBody(
   }
 
   if (completed === 0) {
-    return withDebtNote(choose('rem-zero', [
+    return choose('rem-zero', [
       `${score}. Zero check-ins so far. Bold strategy: ignore it completely.`,
       `${score}. You haven't checked in once. The objective asked if it did something wrong.`,
       `${score}. A beautifully preserved objective. Museum-quality avoidance.`,
@@ -78,11 +72,11 @@ export function objectiveReminderBody(
       `${score}. You've kept the objective waiting. Who's next? Your boss? Your best friend? Your future self?`,
       `${score}. Dear diary, my darling is ignoring me. AGAIN.`,
       `${score}. My disappointment is immeasurable and my day is ruined.`,
-    ]), debt)
+    ])
   }
 
   if (remaining <= 2) {
-    return withDebtNote(choose('rem-deadline', [
+    return choose('rem-deadline', [
       `${score}. ${left}. So close. Almost like you planned to stop here.`,
       `${score}. ${left}. This is not the time to develop an exit strategy.`,
       `${score}. ${left}. So close you can taste the dopamine. Finish it.`,
@@ -90,13 +84,12 @@ export function objectiveReminderBody(
       `${score}. ${left}. Finish it. We believe in you. Reluctantly.`,
       `${score}. ${left}. You've come too far to let this become a thing you almost did.`,
       `${score}. ${left}. It would be a shame to stall here. Just saying.`,
-    ]), debt)
+    ])
   }
 
   if (pct(completed, target) < 35) {
-    return withDebtNote(choose('rem-lowpct', [
+    return choose('rem-lowpct', [
       `${score}. A start! A tiny, tiny start. ${left}.`,
-      `${score}. You checked in once (or twice). Technically counts. ${left}.`,
       `${score}. ${pct(completed, target)}% done. ${left}. We've seen worse. Barely.`,
       `${score}. ${left}. Take your time. (Please don't.)`,
       `${score}. ${left}. We'd say no pressure but that would be a lie.`,
@@ -104,7 +97,7 @@ export function objectiveReminderBody(
       `${score}. A noble attempt at starting... today. ${left}.`,
       `${score}. The bar was on the floor and you still limbo'd under it. Respect. ${left}.`,
       `${score}. ${pct(completed, target)}% done. At this speed, your grandchildren will finish this objective for you. ${left}.`,
-    ]), debt)
+    ])
   }
 
   if (debt > 0) {
