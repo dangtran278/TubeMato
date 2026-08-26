@@ -1230,12 +1230,41 @@ export default function ObjectivesView() {
     recomputeCompletions(fetched, objectiveLogs)
   }
 
+  const activeObjectives = useMemo(() => objectives.filter(o => !o.archived), [objectives])
+
   // Ordered by board status (overdue, debt, behind, on-track, done), which also sinks met
-  // objectives to the bottom; live completions drive the tier, so it re-sorts on every check-in.
-  const sortedActive = useMemo(
-    () => sortActiveObjectives(objectives.filter(o => !o.archived), o => completionsMap[o.id] ?? 0, today),
-    [objectives, completionsMap, today],
+  // objectives to the bottom; live completions drive the tier, so this reflects the true order
+  // on every check-in.
+  const naturallySorted = useMemo(
+    () => sortActiveObjectives(activeObjectives, o => completionsMap[o.id] ?? 0, today),
+    [activeObjectives, completionsMap, today],
   )
+
+  // Row order among still-open objectives is frozen so paying off debt mid check-in can't reshuffle
+  // rows and land a click on the wrong one; it only re-derives when the open set itself changes, not
+  // on a status change alone. Completed objectives skip the freeze and sink to the bottom immediately.
+  const openSorted = useMemo(
+    () => naturallySorted.filter(o => !isObjectiveMet(o, completionsMap[o.id] ?? 0)),
+    [naturallySorted, completionsMap],
+  )
+  const doneSorted = useMemo(
+    () => naturallySorted.filter(o => isObjectiveMet(o, completionsMap[o.id] ?? 0)),
+    [naturallySorted, completionsMap],
+  )
+  const frozenOrderRef = useRef<string[]>([])
+  const openIdSetRef = useRef('')
+  const openIdSet = openSorted.map(o => o.id).sort().join(',')
+  // Mutating a ref during render off derived state is React's documented pattern; safe under
+  // StrictMode's double-invoke since it's idempotent when openIdSet hasn't changed.
+  if (openIdSet !== openIdSetRef.current) {
+    openIdSetRef.current = openIdSet
+    frozenOrderRef.current = openSorted.map(o => o.id)
+  }
+  const sortedActive = useMemo(() => {
+    const byId = new Map(naturallySorted.map(o => [o.id, o]))
+    const frozenOpen = frozenOrderRef.current.map(id => byId.get(id)).filter((o): o is Objective => !!o)
+    return [...frozenOpen, ...doneSorted]
+  }, [naturallySorted, doneSorted])
 
   // All registered groups (in registry order) so the filter doubles as group management: even a
   // group with no active objectives can be filtered to and deleted. Plus a "No group" bucket when
