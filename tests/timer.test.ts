@@ -796,6 +796,57 @@ describe('skip after goal (in +1 bonus)', () => {
   }, 5000)
 })
 
+// ─── Extending work across multiple nominal lengths credits multiple pomodoros ─
+describe('extendWork banking more than one nominal length', () => {
+  it('elapsed just over 2x nominal credits exactly 2 pomodoros and reaches the long-break threshold in one jump', async () => {
+    const t = makeTimerShort([], { workDuration: 1, pomodorosBeforeLongBreak: 2 })
+    t.start()
+    t.extendWork() // secondsLeft/totalSeconds 1 → 61, so it won't naturally complete at the 1s mark
+    await wait(2200) // ~2 ticks: elapsed ≈ 2s = 2x the 1s nominal goal
+    t.skip()
+    expect(t.getSession().sessionCount).toBe(2)
+    expect(t.getSession().state).toBe('break-long')
+  }, 5000)
+
+  it('a single block that overshoots the threshold by more than one pomodoro still crosses it (does not need to land exactly on a multiple)', async () => {
+    const t = makeTimerShort([], { workDuration: 1, pomodorosBeforeLongBreak: 2 })
+    t.start()
+    t.extendWork()
+    await wait(3200) // ~3 ticks: elapsed ≈ 3s = 3x nominal → sessionCount jumps 0 → 3, past the every-2 threshold, never landing on it
+    t.skip()
+    expect(t.getSession().sessionCount).toBe(3)
+    expect(t.getSession().state).toBe('break-long')
+  }, 5000)
+
+  it('elapsed short of a second nominal length credits only 1 pomodoro (floor, not round up)', async () => {
+    const t = makeTimerShort([], { workDuration: 2, pomodorosBeforeLongBreak: 2 })
+    t.start()
+    t.extendWork()
+    await wait(3200) // ~3 ticks: elapsed ≈ 3s, short of the 4s (2x) needed for a 2nd pomodoro
+    t.skip()
+    expect(t.getSession().sessionCount).toBe(1)
+    expect(t.getSession().state).toBe('break-short')
+  }, 5000)
+
+  it('a +1 from grace/procrastinating after a multi-credit long break continues as long, not re-derived from sessionCount', async () => {
+    const t = makeTimerShort([], { workDuration: 1, pomodorosBeforeLongBreak: 2 })
+    t.start()
+    t.extendWork()
+    await wait(3200) // elapsed ≈ 3s → sessionCount 0 → 3 (past the every-2 threshold) → break-long
+    t.skip()
+    expect(t.getSession().sessionCount).toBe(3)
+    expect(t.getSession().state).toBe('break-long')
+    await wait(1200) // break (1s nominal) → grace
+    await wait(1200) // grace (1s) → procrastinating
+    const st1 = t.getSession().state
+    expect(st1 === 'grace' || st1 === 'procrastinating').toBe(true)
+    t.extendBreak() // +1 from grace/procrastinating: sessionCount (3) isn't a multiple of 2,
+    // so re-deriving from it would wrongly give break-short; it must stay break-long.
+    expect(t.getSession().state).toBe('break-long')
+    t.skip()
+  }, 8000)
+})
+
 // ─── flushOnQuit: reward/punish parity with skip ──────────────────────────────
 describe('flushOnQuit reward/punish', () => {
   it('quit AFTER reaching the goal (in +1 bonus) logs a completed pomodoro', async () => {

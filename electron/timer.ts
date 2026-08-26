@@ -46,6 +46,10 @@ export class TimerEngine {
   /** Planned work length at block start, before any +1 min. A skip that has already banked this much
    *  focus (elapsed running = totalSeconds - secondsLeft) counts as a completed pomodoro. */
   private workNominalTotalSeconds = 0
+  /** Break type carried over from when the break started, so a +1 min from grace/procrastinating
+   *  doesn't re-derive it from `sessionCount`, which may no longer sit on an exact multiple of
+   *  `pomodorosBeforeLongBreak` once a single block can credit more than one pomodoro. */
+  private lastBreakWasLong = false
   /** One-shot guard so flushOnQuit logs at most once, whichever quit path fires it. */
   private didQuitFlush = false
   /** Whether any window is on screen to receive ticks. Defaults true so a standalone engine
@@ -237,7 +241,7 @@ export class TimerEngine {
     if (this.session.state === 'grace' || this.session.state === 'procrastinating') {
       this.stopGrace()
       this.endProcrastination()
-      this.session.state = this.isLongBreakDue() ? 'break-long' : 'break-short'
+      this.session.state = this.lastBreakWasLong ? 'break-long' : 'break-short'
       this.session.secondsLeft = 60
       this.session.totalSeconds = 60
       this.breakNominalTotalSeconds = 60
@@ -409,17 +413,29 @@ export class TimerEngine {
 
   // ─── Work session completion ────────────────────────────────────────────────
 
-  /**
-   * A long break is due only after completing a positive multiple of the interval.
-   * `sessionCount` counts completed pomodoros (skips don't increment it), so the
-   * `> 0` guard stops a skipped first block (0 % N === 0) from granting a long break.
-   */
+  /** A long break is due only after completing a positive multiple of the interval (the `> 0`
+   *  guard stops a skipped first block from granting one). Single-pomodoro credit only; a block
+   *  credited with several at once must use `crossedLongBreakThreshold` instead. */
   private isLongBreakDue(): boolean {
     const every = this.resolveObjectiveDurations(this.session.activeObjectiveId).longEvery
     return (
       this.session.sessionCount > 0 &&
       this.session.sessionCount % every === 0
     )
+  }
+
+  /** Whether crediting up to `newSessionCount` passed a multiple of `pomodorosBeforeLongBreak`,
+   *  however far a multi-pomodoro credit overshot it. */
+  private crossedLongBreakThreshold(previousSessionCount: number, newSessionCount: number): boolean {
+    const every = this.resolveObjectiveDurations(this.session.activeObjectiveId).longEvery
+    return Math.floor(previousSessionCount / every) < Math.floor(newSessionCount / every)
+  }
+
+  /** How many nominal-length work blocks this session's focus time covers; at least 1
+   *  (only called once the goal is reached). */
+  private completedPomodoroCount(): number {
+    const elapsedSeconds = this.session.totalSeconds - this.session.secondsLeft
+    return Math.max(1, Math.floor(elapsedSeconds / this.workNominalTotalSeconds))
   }
 
   /**
@@ -444,16 +460,21 @@ export class TimerEngine {
 
   private endWorkSession(completed: boolean) {
     this.logWorkSession(completed)
+
+    let isLongBreak: boolean
     if (completed) {
-      this.session.sessionCount++
+      const previousSessionCount = this.session.sessionCount
+      this.session.sessionCount += this.completedPomodoroCount()
+      isLongBreak = this.crossedLongBreakThreshold(previousSessionCount, this.session.sessionCount)
+    } else {
+      isLongBreak = this.isLongBreakDue()
     }
+    this.lastBreakWasLong = isLongBreak
 
     // The break-start bell always rings here, at the actual work→break transition. (Any
     // early music fade-out was already kicked off by onPreBreak; this is the bell, on time.)
     this.onBell('break-start')
 
-    // sessionCount already incremented above; compute break type from the new count.
-    const isLongBreak = this.isLongBreakDue()
     const d = this.resolveObjectiveDurations(this.session.activeObjectiveId)
     const breakDuration = isLongBreak ? d.long : d.short
 
