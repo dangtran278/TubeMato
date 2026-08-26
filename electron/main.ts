@@ -365,7 +365,7 @@ function createMainWindow() {
 // ─── Mini widget window ───────────────────────────────────────────────────────
 
 const WIDGET_W = 290
-const WIDGET_H = 90
+const WIDGET_H = 60
 const MASCOT_W = 400
 const MASCOT_H = 460
 const MASCOT_GLOW_PAD = 50  // horizontal glow room to the right of the 300px mascot
@@ -376,7 +376,7 @@ const MASCOT_VPAD = 80
 /** Returns `pos` unchanged if at least MIN_VISIBLE_X/Y px of the widget overlaps any display's work area; otherwise resets to top-center of primary display. */
 function clampWidgetPosition(pos: { x: number; y: number }): { x: number; y: number } {
   const MIN_VISIBLE_X = 275
-  const MIN_VISIBLE_Y = 60
+  const MIN_VISIBLE_Y = 40
   for (const d of screen.getAllDisplays()) {
     const { x, y, width, height } = d.workArea
     const overlapX = Math.min(pos.x + WIDGET_W, x + width) - Math.max(pos.x, x)
