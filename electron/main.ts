@@ -128,6 +128,7 @@ let mascotWindow: BrowserWindow | null = null
 let notificationsWindow: BrowserWindow | null = null
 // Event cards persist until their event is over: id → occurrence-end in wall-clock total minutes.
 const notifyEventEnds = new Map<string, number>()
+let activeProcrastinationNotifId: string | null = null
 // Cards requested before the overlay renderer finished loading; flushed on did-finish-load.
 let notifyPending: { card: AppNotification; bell?: BellType }[] = []
 let notifyReady = false
@@ -147,11 +148,12 @@ const timer = new TimerEngine({
   logProcrastination,
   sendProcrastinationNotification: () => {
     const personality = store.get('settings').personality
+    const id = `procrastination-${Date.now()}`
+    activeProcrastinationNotifId = id
     showAppNotification({
-      id: `procrastination-${Date.now()}`,
+      id,
       kind: 'procrastination',
-      persist: false,
-      durationMs: NOTIFY_DURATION.procrastination,
+      persist: true,
       title: procrastinationNudgeTitle(personality),
       body: procrastinationNudgeBody(personality),
       action: 'open-timer',
@@ -846,7 +848,7 @@ function showAppNotification(card: AppNotification, bell?: BellType) {
 }
 
 // Reading-time budgets (ms) for the auto-dismiss cards; the summary carries the most to read.
-const NOTIFY_DURATION = { reminder: 8000, procrastination: 7000, summary: 10000 }
+const NOTIFY_DURATION = { reminder: 8000, summary: 10000 }
 
 // Each card shows the mascot (calm vs passive-aggressive tomato, per personality), cached per personality.
 const mascotDataUrlCache: Partial<Record<Personality, string>> = {}
@@ -1124,6 +1126,10 @@ function startTimerBroadcast() {
   // (autoLaunch, widget off) never runs a pulse nobody asked for.
   syncTimerObserved()
   timer.onTick = session => {
+    if (activeProcrastinationNotifId && session.state !== 'procrastinating') {
+      notificationsWindow?.webContents.send(IPC.NOTIFY_DISMISS, activeProcrastinationNotifId)
+      activeProcrastinationNotifId = null
+    }
     // Don't wake hidden renderers every second; they re-sync via the show/restore handlers.
     if (mainWindow?.isVisible()) {
       mainWindow.webContents.send(IPC.TIMER_TICK, session)

@@ -272,7 +272,7 @@
         close.addEventListener("click", (e) => { e.stopPropagation(); removeCard(n.id); });
         el.appendChild(close);
 
-        if (n.persist) {
+        if (n.persist && n.kind === "event") {
           // Event card: clicking the body (anywhere but Start / ×) opens the Calendar; the card
           // persists until Start is clicked or the event ends.
           el.addEventListener("click", () => N.action(n.id, "open-calendar"));
@@ -283,6 +283,10 @@
             btn.addEventListener("click", (e) => { e.stopPropagation(); fireAction(cardById(n.id)); });
             iconCol.appendChild(btn);
           }
+        } else if (n.persist) {
+          // Other persist cards (procrastination): no reading-time bar (main dismisses explicitly),
+          // otherwise routes its action like an auto-dismiss card.
+          if (n.action) el.addEventListener("click", () => fireAction(cardById(n.id)));
         } else {
           // Auto-dismiss card: whole card routes its action, plus a depleting reading-time bar.
           if (n.action) el.addEventListener("click", () => fireAction(cardById(n.id)));
