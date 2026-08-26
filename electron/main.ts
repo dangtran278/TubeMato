@@ -15,7 +15,7 @@ import { bumpObjectiveRevision } from './objectiveRevision'
 import { getNotificationIcon } from './notificationIcon'
 import { objectiveStatus } from './objectiveSummary'
 import { indexCompletions, countCompletionsIndexed } from './objectiveCounts'
-import { isObjectiveMet } from './objectiveDebt'
+import { isObjectiveMet, hasOutstandingDebt } from './objectiveDebt'
 import { reassertWidgetTopmost } from './widgetTopmost'
 import {
   procrastinationNudgeTitle,
@@ -614,10 +614,14 @@ function objectiveMenuItems(): Electron.MenuItemConstructorOptions[] {
     .map(o => ({ o, completed: countCompletionsIndexed(o, counts) }))
     // Same rule as the Timer tab's picker: a finished one-time objective is done being chosen.
     .filter(({ o, completed }) => !(o.type === 'one-time' && isObjectiveMet(o, completed)))
-    .map(({ o, completed }) => ({ o, status: objectiveStatus(o, completed, today) }))
+    .map(({ o, completed }) => ({ o, completed, status: objectiveStatus(o, completed, today) }))
 
   const rank = { behind: 0, 'on-track': 1, done: 2 } as const
-  candidates.sort((a, b) => rank[a.status] - rank[b.status] || a.o.title.localeCompare(b.o.title))
+  // objectiveStatus() ignores carried-over debt, so an objective mid-period with unpaid debt
+  // would otherwise rank as calmly 'on-track'. Rank it like 'behind' so paying it off moves the row.
+  const menuRank = (c: (typeof candidates)[number]) =>
+    c.status !== 'done' && hasOutstandingDebt(c.o, c.completed) ? rank.behind : rank[c.status]
+  candidates.sort((a, b) => menuRank(a) - menuRank(b) || a.o.title.localeCompare(b.o.title))
 
   const shown = candidates.slice(0, MENU_OBJECTIVE_LIMIT)
   // The checkmark is this menu's only report of what the timer is running against, so keep the
@@ -625,7 +629,8 @@ function objectiveMenuItems(): Electron.MenuItemConstructorOptions[] {
   if (activeId && !shown.some(({ o }) => o.id === activeId)) {
     const active = all.find(o => o.id === activeId)
     if (active) {
-      shown.push({ o: active, status: objectiveStatus(active, countCompletionsIndexed(active, counts), today) })
+      const completed = countCompletionsIndexed(active, counts)
+      shown.push({ o: active, completed, status: objectiveStatus(active, completed, today) })
     }
   }
 
