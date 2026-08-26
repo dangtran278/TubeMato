@@ -1171,6 +1171,14 @@ function startTimerBroadcast() {
     bridgeLog('work extended past pre-break fade: restore work music play=', play)
     music.onWorkStart(play)
   }
+
+  timer.onObjectiveSwitch = session => {
+    const phase = session.state === 'running' ? 'work' : 'break'
+    const play = musicPlayFor(phase)
+    bridgeLog('objective switched mid-phase, phase=', phase, 'play=', play)
+    if (phase === 'work') music.onWorkStart(play)
+    else music.onBreakStart(play)
+  }
 }
 
 // ─── Quit ─────────────────────────────────────────────────────────────────────

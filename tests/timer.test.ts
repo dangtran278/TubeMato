@@ -488,6 +488,55 @@ describe('setActiveObjective', () => {
     const row = logged.find(s => !s.segmentOnly)
     expect(row?.objectiveId).toBe('obj-2')
   }, 5000)
+
+  it('fires onObjectiveSwitch while running, with the running session', async () => {
+    const t = makeTimer([])
+    let fired: string | undefined
+    t.onObjectiveSwitch = s => { fired = s.state }
+    t.start('obj-1')
+    await wait(2100)
+    t.setActiveObjective('obj-2')
+    expect(fired).toBe('running')
+  }, 5000)
+
+  it('fires onObjectiveSwitch during a live (unpaused) break', async () => {
+    const logged: PomodoroSessionRecord[] = []
+    const t = makeTimerShort(logged)
+    let fired: string | undefined
+    t.start('obj-1')
+    await wait(1200) // work → break
+    expect(t.getSession().state).toBe('break-short')
+    t.onObjectiveSwitch = s => { fired = s.state }
+    t.setActiveObjective('obj-2')
+    expect(fired).toBe('break-short')
+  }, 5000)
+
+  it('does NOT fire onObjectiveSwitch during a paused break', async () => {
+    const logged: PomodoroSessionRecord[] = []
+    const t = makeTimerShort(logged)
+    t.start('obj-1')
+    await wait(1200) // work → break
+    t.pause()
+    expect(t.getSession().isBreakPaused).toBe(true)
+    let fired = false
+    t.onObjectiveSwitch = () => { fired = true }
+    t.setActiveObjective('obj-2')
+    expect(fired).toBe(false)
+  }, 5000)
+
+  it('does NOT fire onObjectiveSwitch while idle or while work is paused', async () => {
+    const t = makeTimer([])
+    let fired = false
+    t.onObjectiveSwitch = () => { fired = true }
+    t.setActiveObjective('obj-1') // idle
+    expect(fired).toBe(false)
+
+    t.start('obj-1')
+    await wait(2100)
+    t.pause()
+    t.setActiveObjective('obj-2') // paused work
+    expect(fired).toBe(false)
+  }, 5000)
 })
 
 // ─── Grace state ─────────────────────────────────────────────────────────────

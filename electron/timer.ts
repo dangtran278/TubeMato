@@ -70,6 +70,9 @@ export class TimerEngine {
    * music out early, so main can fade work music back in for the bonus minute.
    */
   public onPreBreakCanceled: () => void = () => {}
+  /** Fires on an objective change during live work/break, so music re-applies without waiting for
+   *  the next phase boundary. Skipped for idle/paused/grace, which aren't music-playing states. */
+  public onObjectiveSwitch: (session: TimerSession) => void = () => {}
 
   private fadeTriggered = false
 
@@ -319,7 +322,10 @@ export class TimerEngine {
     }
     this.session.activeObjectiveId = objectiveId
     this.applyIdleWorkPreview()
-    this.onTick(this.getSession())
+    const session = this.getSession()
+    this.onTick(session)
+    const isLiveBreak = (session.state === 'break-short' || session.state === 'break-long') && !session.isBreakPaused
+    if (session.state === 'running' || isLiveBreak) this.onObjectiveSwitch(session)
   }
 
   /**
