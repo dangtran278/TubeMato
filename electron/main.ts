@@ -1507,23 +1507,39 @@ function registerIPC() {
   })
   ipcMain.on(IPC.WIDGET_CONTEXT_MENU, () => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return
-    // Re-entrancy guard: a second request landing while a menu is up would let the first menu's
-    // callback drop focusable back to false underneath the second, recreating the defect below.
+    // Re-entrancy guard: a second request landing while a menu is up would destroy the first menu's
+    // host underneath it.
     if (widgetMenuOpen) return
     widgetMenuOpen = true
-    // The widget is focusable:false so it can never steal focus while working, but a menu owned by a
-    // non-activatable window never gets the focus-lost event that dismisses it. Lend focus for the
-    // menu's life only.
-    //
-    // KNOWN DEFECT: the widget keeps foreground after the menu closes, so keystrokes land on an
-    // inputless window until clicked elsewhere. Not worth a native-FFI fix here.
-    widgetWindow.setFocusable(true)
-    widgetWindow.focus()
+
+    // The widget is focusable:false, so it can't own the menu - a menu on a window that can never
+    // hold focus never gets the focus-lost event that dismisses it. Use a disposable host instead:
+    // destroying it (rather than blurring it) makes Windows hand foreground to the next window
+    // that can actually be activated.
+    const b = widgetWindow.getBounds()
+    const menuHost = new BrowserWindow({
+      x: b.x,
+      y: b.y,
+      width: 1,
+      height: 1,
+      frame: false,
+      transparent: true,
+      skipTaskbar: true,
+      resizable: false,
+      show: false,
+    })
+    // showInactive would defeat the point - the host has to actually hold focus for the menu to
+    // dismiss itself on click-away.
+    menuHost.show()
     buildWidgetContextMenu().popup({
-      window: widgetWindow,
+      window: menuHost,
       callback: () => {
         widgetMenuOpen = false
-        if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.setFocusable(false)
+        // Deferred: destroying the host inside this callback crashed the app when the dismissal
+        // was itself a click landing on the host.
+        setImmediate(() => {
+          if (!menuHost.isDestroyed()) menuHost.destroy()
+        })
       },
     })
   })
