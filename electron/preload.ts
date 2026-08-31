@@ -134,6 +134,8 @@ contextBridge.exposeInMainWorld('tubemato', {
       ipcRenderer.on(IPC.MASCOT_PLAY, handler)
       return () => ipcRenderer.off(IPC.MASCOT_PLAY, handler)
     },
+    settled: (left: number, top: number, width: number, height: number) =>
+      ipcRenderer.send(IPC.MASCOT_SETTLED, left, top, width, height),
   },
 
   // ─── App ───────────────────────────────────────────────────────────────────

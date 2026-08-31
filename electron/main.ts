@@ -373,6 +373,10 @@ const MASCOT_GLOW_PAD = 50  // horizontal glow room to the right of the 300px ma
 // its glow against the window edge. 460 = 300 (image) + 2*80.
 const MASCOT_VPAD = 80
 
+// Remembered mascot window size. Reposition calls must pass this, not a getBounds() read -
+// reading Windows' bounds and writing them back drifts a pixel or two per call.
+let mascotSize = { width: MASCOT_W, height: MASCOT_H }
+
 /** Returns `pos` unchanged if at least MIN_VISIBLE_X/Y px of the widget overlaps any display's work area; otherwise resets to top-center of primary display. */
 function clampWidgetPosition(pos: { x: number; y: number }): { x: number; y: number } {
   const MIN_VISIBLE_X = 275
@@ -408,6 +412,12 @@ function createWidgetWindow() {
     opacity: 0.75,
     icon: getWindowIcon(),
   })
+
+  // The constructor's width/height come back one DIP proud on every side on Windows: 290x60 asked
+  // for, 292x62 measured (438x93 physical at 150%). Tiny, but it's the same transparent surplus as
+  // the drag bug - it eats clicks on whatever sits under that lip - and nothing else resizes the
+  // window afterwards, so it would survive until the first drag. setBounds lands exact.
+  widgetWindow.setBounds({ x: pos.x, y: pos.y, width: WIDGET_W, height: WIDGET_H })
 
   const theme = currentTheme()
   if (isDev) {
@@ -1230,7 +1240,11 @@ function applyWidgetVisibility(show: boolean) {
   if (show) {
     const [wx, wy] = widgetWindow.getPosition()
     const clamped = clampWidgetPosition({ x: wx, y: wy })
-    if (clamped.x !== wx || clamped.y !== wy) widgetWindow.setPosition(clamped.x, clamped.y)
+    // setBounds over setPosition for the same size-drift reason as IPC.WIDGET_MOVE; this one fires
+    // once per show rather than per mousemove, so it creeps far slower, but it creeps.
+    if (clamped.x !== wx || clamped.y !== wy) {
+      widgetWindow.setBounds({ x: clamped.x, y: clamped.y, width: WIDGET_W, height: WIDGET_H })
+    }
     widgetWindow.show()
   } else {
     widgetWindow.hide()
@@ -1463,12 +1477,24 @@ function registerIPC() {
   ipcMain.on(IPC.WIDGET_MOVE, (_, dx: number, dy: number) => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return
     const [wx, wy] = widgetWindow.getPosition()
-    widgetWindow.setPosition(Math.round(wx + dx), Math.round(wy + dy))
-    // The mascot overlay is glued to the widget. Drag it by the same delta so it
-    // doesn't get left behind when the widget moves.
+    // setBounds, not setPosition - setPosition re-derives size from a bounds round-trip that
+    // drifts a pixel or two per call on Windows, inflating the window over a drag's mousemoves.
+    widgetWindow.setBounds({
+      x: Math.round(wx + dx),
+      y: Math.round(wy + dy),
+      width: WIDGET_W,
+      height: WIDGET_H,
+    })
+    // Mascot rides the same delta, using mascotSize rather than MASCOT_W/H so a drag after it
+    // settles doesn't re-inflate it.
     if (mascotWindow && !mascotWindow.isDestroyed() && mascotWindow.isVisible()) {
       const [mx, my] = mascotWindow.getPosition()
-      mascotWindow.setPosition(Math.round(mx + dx), Math.round(my + dy))
+      mascotWindow.setBounds({
+        x: Math.round(mx + dx),
+        y: Math.round(my + dy),
+        width: mascotSize.width,
+        height: mascotSize.height,
+      })
     }
     // setPosition does not fire 'moved' on Windows, so save position here.
     if (widgetPosSaveTimer) clearTimeout(widgetPosSaveTimer)
@@ -1557,6 +1583,9 @@ function registerIPC() {
           nodeIntegration: false,
         },
       })
+      // Pin bounds after construction - same size drift as the widget's constructor.
+      mascotWindow.setBounds({ x: ox, y: oy, width: MASCOT_W, height: MASCOT_H })
+      mascotSize = { width: MASCOT_W, height: MASCOT_H }
       if (isDev) {
         mascotWindow.loadURL('http://localhost:5173/widget/mascot-overlay.html')
       } else {
@@ -1568,7 +1597,9 @@ function registerIPC() {
         mascotWindow?.webContents.send(IPC.MASCOT_PLAY, mascotMode, mascotSide)
       })
     } else {
-      mascotWindow.setPosition(ox, oy)
+      // Also resets any previous settle, here and in the overlay's own anchoring.
+      mascotWindow.setBounds({ x: ox, y: oy, width: MASCOT_W, height: MASCOT_H })
+      mascotSize = { width: MASCOT_W, height: MASCOT_H }
       mascotWindow.show()
       mascotWindow.webContents.send(IPC.MASCOT_PLAY, mascotMode, mascotSide)
     }
@@ -1578,6 +1609,22 @@ function registerIPC() {
     // Destroyed (not hidden) to free the renderer between rare appearances; 'closed' nulls
     // mascotWindow, so the next MASCOT_SHOW recreates it.
     if (mascotWindow && !mascotWindow.isDestroyed()) mascotWindow.destroy()
+  })
+
+  // Shrinks the overlay onto the settled art's box the renderer reports (both sides in DIPs, so
+  // offsets add straight onto current bounds). Overlay re-anchors its content in the same turn,
+  // so the mascot doesn't move on screen.
+  ipcMain.on(IPC.MASCOT_SETTLED, (_e, left: number, top: number, width: number, height: number) => {
+    if (!mascotWindow || mascotWindow.isDestroyed()) return
+    if (!(width > 0 && height > 0)) return
+    const b = mascotWindow.getBounds()
+    mascotSize = { width: Math.round(width), height: Math.round(height) }
+    mascotWindow.setBounds({
+      x: b.x + Math.round(left),
+      y: b.y + Math.round(top),
+      width: mascotSize.width,
+      height: mascotSize.height,
+    })
   })
 
   // Notification overlay

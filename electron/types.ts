@@ -521,6 +521,7 @@ export const IPC = {
   MASCOT_SHOW: 'mascot:show',
   MASCOT_HIDE: 'mascot:hide',
   MASCOT_PLAY: 'mascot:play',
+  MASCOT_SETTLED: 'mascot:settled',     // overlay → main: jumpscare landed, here's the art's box
 
   // In-app notification overlay
   NOTIFY_ADD: 'notify:add',             // main → overlay: show a card

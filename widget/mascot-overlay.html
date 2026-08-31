@@ -110,10 +110,21 @@
       const wrap = document.getElementById("mascot-wrap");
       const mascot = document.getElementById("mascot");
 
+      // Padding around the settled art so its drop-shadow glow isn't clipped by the shrunk window.
+      const GLOW_PAD = 14;
+
+      let settled = false;
+
       // mode: 'center' | 'up' | 'down' : set by the main process from the widget's
       // position so the jumpscare grows away from the nearest screen edge.
       // side: 'left' | 'right' : which side of the widget the mascot appears on.
       function play(mode, side) {
+        // Main has already resized the window back to full; drop the anchoring settle() applied.
+        settled = false;
+        wrap.style.right = "";
+        wrap.style.left = "";
+        wrap.style.top = "";
+
         wrap.classList.toggle("side-right", side === "right");
         mascot.classList.remove("mode-center", "mode-up", "mode-down");
         mascot.classList.add("mode-" + (mode === "up" || mode === "down" ? mode : "center"));
@@ -121,6 +132,34 @@
         void mascot.offsetWidth; // reflow so re-adding the class restarts the animation
         mascot.classList.add("jumpscare");
       }
+
+      // Reports the settled art's box so main can shrink the window onto it.
+      function settle() {
+        if (settled) return;
+        const art = mascot.getBoundingClientRect(); // reflects the settled scale(0.28)
+        if (art.width <= 0 || art.height <= 0) return;
+        settled = true;
+
+        const box = {
+          left: Math.floor(art.left) - GLOW_PAD,
+          top: Math.floor(art.top) - GLOW_PAD,
+          width: Math.ceil(art.width) + GLOW_PAD * 2,
+          height: Math.ceil(art.height) + GLOW_PAD * 2,
+        };
+
+        // Re-anchor from `right` (viewport-relative) to left/top before main resizes, or
+        // shrinking the window would slide the mascot sideways.
+        const w = wrap.getBoundingClientRect();
+        wrap.style.right = "auto";
+        wrap.style.left = w.left - box.left + "px";
+        wrap.style.top = w.top - box.top + "px";
+
+        window.tubemato.mascot.settled(box.left, box.top, box.width, box.height);
+      }
+
+      mascot.addEventListener("animationend", (e) => {
+        if (e.animationName === "jumpscare") settle();
+      });
 
       // The main process drives every play (including the first, once this view has
       // finished loading) and tells us which way to expand.
