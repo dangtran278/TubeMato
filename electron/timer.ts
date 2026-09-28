@@ -28,7 +28,8 @@ export class TimerEngine {
   private graceStart: Date | null = null
   private procrastinationStart: Date | null = null
   private procrastinationNudgeSent = false
-  /** Wall time when break ended (grace started); nudge fires `procrastinationNudgeSeconds` after this, not after grace + nudge. */
+  /** Wall time when break ended (grace started); nudge fires `procrastinationNudgeSeconds` after this, not after grace + nudge.
+   *  A nudge shorter than grace fires when overdue begins. */
   private procrastinationNudgeEpochMs: number | null = null
   private workSessionStart: Date = new Date()
   /** Start of the current attribution segment; resets when the active objective switches mid-block. */
@@ -535,13 +536,11 @@ export class TimerEngine {
     // 'grace-start' = break is over, distinct alert sound (no music change; music already paused)
     this.onBell('grace-start')
     this.onTick(this.getSession())
-    this.maybeNotifyProcrastinationNudge()
 
     this.graceInterval = setInterval(() => {
       // Clamped for display; raw value drives the transition so a sleep outlasting grace can't flash negative.
       const left = this.graceSecondsLeftNow()
       this.session.graceSecondsLeft = Math.max(0, left)
-      this.maybeNotifyProcrastinationNudge()
       this.onTick(this.getSession())
       if (left <= 0) {
         const expiredAt = new Date(this.graceExpiryMs())

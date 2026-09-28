@@ -195,13 +195,17 @@ export default function SettingsView() {
             <NumInput value={local.pomodorosBeforeLongBreak} min={1} max={MAX_POMODOROS_BEFORE_LONG_BREAK} onChange={v => patch({ pomodorosBeforeLongBreak: v })} />
           </Row>
           <Row label="Grace period" hint="Your window to start working before the procrastination timer begins, in seconds.">
-            <NumInput value={local.procrastinationGrace} min={1} max={MAX_TIMER_DURATION_S} onChange={v => patch({ procrastinationGrace: v })} />
+            {/* The nudge has to land after grace, so raising grace past it carries it along. */}
+            <NumInput value={local.procrastinationGrace} min={1} max={MAX_TIMER_DURATION_S - 1} onChange={v => patch({
+              procrastinationGrace: v,
+              procrastinationNudgeSeconds: Math.max(local.procrastinationNudgeSeconds ?? 300, v + 1),
+            })} />
           </Row>
           <Row label="Procrastination nudge" hint={hint(
             'Idle time after a break ends before a reminder fires, in seconds.',
             'How long we wait after a break ends before reminding you that you still have work to do, in seconds.',
           )}>
-            <NumInput value={local.procrastinationNudgeSeconds ?? 300} min={1} max={MAX_TIMER_DURATION_S} onChange={v => patch({ procrastinationNudgeSeconds: v })} />
+            <NumInput value={local.procrastinationNudgeSeconds ?? 300} min={local.procrastinationGrace + 1} max={MAX_TIMER_DURATION_S} onChange={v => patch({ procrastinationNudgeSeconds: v })} />
           </Row>
         </Section>
 
