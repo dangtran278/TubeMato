@@ -12,8 +12,10 @@ import '@fontsource/jetbrains-mono/latin-700.css'
 import './index.css'
 import App from './App'
 import { installAnimationGate } from './utils/animationGate'
+import { installPointerFocusRelease } from './utils/pointerFocus'
 
 installAnimationGate()
+installPointerFocusRelease()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
