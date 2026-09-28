@@ -454,12 +454,16 @@ export interface AppNotification {
   body: string
   /** Auto-dismiss cards only: the reading-time budget its bar depletes over. */
   durationMs?: number
-  /** Action id main routes on click ('start-block' | 'open-timer' | 'open-analytics' | 'open-reminder'). */
+  /** Action id main routes on click ('start-block' | 'start-work' | 'open-timer' | 'open-analytics' |
+   *  'open-reminder'). On a card with actionLabel, only the button fires it. */
   action?: string
   /** Payload for the action, e.g. the objectiveId for 'start-block'. */
   actionData?: string
   /** Persist cards only: label for the explicit action button (e.g. 'Start'). */
   actionLabel?: string
+  /** Persist cards with actionLabel: action routed when the card body (not the button) is clicked.
+   *  The card stays up. */
+  bodyAction?: string
   /** Optional mascot avatar (a data: URL), shown at the card's leading edge. */
   iconDataUrl?: string
 }

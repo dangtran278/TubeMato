@@ -156,7 +156,9 @@ const timer = new TimerEngine({
       persist: true,
       title: procrastinationNudgeTitle(personality),
       body: procrastinationNudgeBody(personality),
-      action: 'open-timer',
+      action: 'start-work',
+      actionLabel: 'Start',
+      bodyAction: 'open-timer',
       iconDataUrl: mascotDataUrl(),
     })
     ringBell('overdue-start')
@@ -944,7 +946,8 @@ function showEventCard(
   if (a.endTotal > nowTotalMinutes()) notifyEventEnds.set(a.id, a.endTotal)
   showAppNotification({
     id: a.id, kind: 'event', persist: true, title: a.title, body: a.body,
-    action: 'start-block', actionData: a.objectiveId, actionLabel: 'Start', iconDataUrl: mascotDataUrl(),
+    action: 'start-block', actionData: a.objectiveId, actionLabel: 'Start', bodyAction: 'open-calendar',
+    iconDataUrl: mascotDataUrl(),
   }, bell)
 }
 
@@ -995,6 +998,13 @@ function anchorNotifications(width: number, height: number) {
 function routeNotificationAction(action: string, data?: string) {
   switch (action) {
     case 'start-block': if (data) startScheduledBlock(data); break
+    case 'start-work': {
+      // Overdue card's Start. Only from the gap states: a click that lands after the timer already
+      // moved on (e.g. started from the widget) must not skip the new session.
+      const state = timer.getSession().state
+      if (state === 'grace' || state === 'procrastinating') skipTimer()
+      break
+    }
     case 'open-calendar': ensureMainWindow('schedule'); break
     case 'open-timer': ensureMainWindow('timer'); break
     case 'open-analytics': presentSummary(); break

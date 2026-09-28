@@ -272,20 +272,21 @@
         close.addEventListener("click", (e) => { e.stopPropagation(); removeCard(n.id); });
         el.appendChild(close);
 
-        if (n.persist && n.kind === "event") {
-          // Event card: clicking the body (anywhere but Start / ×) opens the Calendar; the card
-          // persists until Start is clicked or the event ends.
-          el.addEventListener("click", () => N.action(n.id, "open-calendar"));
+        if (n.persist && n.actionLabel) {
+          // Button card (event, overdue): clicking the body (anywhere but the button / ×) routes
+          // bodyAction (Calendar / Timer) and leaves the card up; it persists until the button is
+          // clicked or main dismisses it (event ended, timer left the overdue state).
+          if (n.bodyAction) el.addEventListener("click", () => N.action(n.id, n.bodyAction));
           if (n.action) {
             const btn = document.createElement("button");
             btn.className = "ntf__action";
-            btn.textContent = n.actionLabel || "Start";
+            btn.textContent = n.actionLabel;
             btn.addEventListener("click", (e) => { e.stopPropagation(); fireAction(cardById(n.id)); });
             iconCol.appendChild(btn);
           }
         } else if (n.persist) {
-          // Other persist cards (procrastination): no reading-time bar (main dismisses explicitly),
-          // otherwise routes its action like an auto-dismiss card.
+          // Other persist cards: no reading-time bar (main dismisses explicitly), otherwise routes
+          // its action like an auto-dismiss card.
           if (n.action) el.addEventListener("click", () => fireAction(cardById(n.id)));
         } else {
           // Auto-dismiss card: whole card routes its action, plus a depleting reading-time bar.
