@@ -1241,8 +1241,8 @@ export default function ObjectivesView() {
   )
 
   // Row order among still-open objectives is frozen so paying off debt mid check-in can't reshuffle
-  // rows and land a click on the wrong one; it only re-derives when the open set itself changes, not
-  // on a status change alone. Completed objectives skip the freeze and sink to the bottom immediately.
+  // rows and land a click on the wrong one. It re-derives when the open set, an open objective's
+  // fields or the day change. Completed objectives skip the freeze and sink to the bottom immediately.
   const openSorted = useMemo(
     () => naturallySorted.filter(o => !isObjectiveMet(o, completionsMap[o.id] ?? 0)),
     [naturallySorted, completionsMap],
@@ -1252,12 +1252,15 @@ export default function ObjectivesView() {
     [naturallySorted, completionsMap],
   )
   const frozenOrderRef = useRef<string[]>([])
-  const openIdSetRef = useRef('')
-  const openIdSet = openSorted.map(o => o.id).sort().join(',')
+  const openKeyRef = useRef('')
+  const openKey = useMemo(
+    () => today + '\n' + openSorted.map(o => JSON.stringify(o)).sort().join('\n'),
+    [openSorted, today],
+  )
   // Mutating a ref during render off derived state is React's documented pattern; safe under
-  // StrictMode's double-invoke since it's idempotent when openIdSet hasn't changed.
-  if (openIdSet !== openIdSetRef.current) {
-    openIdSetRef.current = openIdSet
+  // StrictMode's double-invoke since it's idempotent when openKey hasn't changed.
+  if (openKey !== openKeyRef.current) {
+    openKeyRef.current = openKey
     frozenOrderRef.current = openSorted.map(o => o.id)
   }
   const sortedActive = useMemo(() => {
