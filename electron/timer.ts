@@ -451,6 +451,7 @@ export class TimerEngine {
    * quit can both reuse it.
    */
   private logWorkSession(completed: boolean) {
+    const pomodoros = completed ? this.completedPomodoroCount() : 1
     this.deps.logSession({
       startAt: this.workSessionStart.toISOString(),
       endAt: new Date().toISOString(),
@@ -460,6 +461,7 @@ export class TimerEngine {
       naturalComplete: completed,
       hadPauseDuringWork: this.workBlockHadPause,
       hadPauseDuringInterWorkGapBefore: this.pauseInGapBeforeCurrentWorkBlock,
+      ...(pomodoros > 1 ? { pomodoros } : {}),
     })
     this.segmentFocusSeconds = 0
   }

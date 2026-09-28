@@ -347,6 +347,8 @@ export interface PomodoroSessionRecord {
   hadPauseDuringWork?: boolean
   /** Paused at least once between the previous work block and this one. Skip-break doesn't set this. */
   hadPauseDuringInterWorkGapBefore?: boolean
+  /** Pomodoros a finished block counts as when extended to several times its length. Omitted = 1. */
+  pomodoros?: number
 }
 
 export interface ProcrastinationEvent {

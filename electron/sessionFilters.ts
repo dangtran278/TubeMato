@@ -3,6 +3,7 @@ export interface SessionForFilter {
   durationSeconds?: number
   naturalComplete?: boolean
   segmentOnly?: boolean
+  pomodoros?: number
 }
 
 /**
@@ -14,4 +15,9 @@ export function countsAsFinishedPomodoro(s: SessionForFilter): boolean {
   if (s.segmentOnly) return false
   if ((s.durationSeconds ?? 0) <= 0) return false
   return s.naturalComplete !== false
+}
+
+/** How many pomodoros a row adds to totals: 0 unless finished, else its extended-block credit. */
+export function finishedPomodoroCount(s: SessionForFilter): number {
+  return countsAsFinishedPomodoro(s) ? (s.pomodoros ?? 1) : 0
 }

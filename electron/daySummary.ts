@@ -3,7 +3,7 @@ import {
   resolveTimeZone,
 } from './calendarDate'
 import { summarizeObjectives } from './objectiveSummary'
-import { countsAsFinishedPomodoro } from './sessionFilters'
+import { finishedPomodoroCount } from './sessionFilters'
 import type {
   DaySummary,
   LogFile,
@@ -62,7 +62,7 @@ export function longestPomodoroStreakFromLog(
   extensions: Pick<BreakExtension, 'timestamp'>[],
   procrastination: Pick<ProcrastinationEvent, 'startAt'>[],
 ): number {
-  type Ev = { t: number; pri: number; kind: 'reset' | 'inc' }
+  type Ev = { t: number; pri: number; kind: 'reset' | 'inc'; count?: number }
   const ev: Ev[] = []
 
   for (const e of extensions) {
@@ -82,7 +82,7 @@ export function longestPomodoroStreakFromLog(
   for (const s of sessions) {
     const te = Date.parse(s.endAt)
     if (Number.isNaN(te)) continue
-    if (isGoodStreakIncrement(s)) ev.push({ t: te, pri: 4, kind: 'inc' })
+    if (isGoodStreakIncrement(s)) ev.push({ t: te, pri: 4, kind: 'inc', count: s.pomodoros ?? 1 })
     else if (isDirtyWorkEndForStreak(s)) ev.push({ t: te, pri: 3, kind: 'reset' })
   }
 
@@ -93,7 +93,7 @@ export function longestPomodoroStreakFromLog(
   for (const e of ev) {
     if (e.kind === 'reset') cur = 0
     else {
-      cur++
+      cur += e.count ?? 1
       best = Math.max(best, cur)
     }
   }
@@ -117,7 +117,7 @@ export function buildDaySummary({ settings, log, objectiveLogs, objectives, now 
   const extThatDay = log.breakExtensions.filter(e => new Date(e.timestamp) >= windowStart)
 
   const totalFocusMinutes = Math.round(sessionsThatDay.reduce((acc, s) => acc + s.durationSeconds, 0) / 60)
-  const pomodorosCompleted = sessionsThatDay.filter(countsAsFinishedPomodoro).length
+  const pomodorosCompleted = sessionsThatDay.reduce((acc, s) => acc + finishedPomodoroCount(s), 0)
   const longestPomodoroStreak = longestPomodoroStreakFromLog(sessionsThatDay, extThatDay, procThatDay)
   const procrastinationMinutes = Math.round(procThatDay.reduce((acc, e) => acc + e.durationSeconds, 0) / 60)
   const breakExtensionMinutes = extThatDay.reduce((acc, e) => acc + e.minutesAdded, 0)

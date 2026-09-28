@@ -20,7 +20,7 @@ import {
   summaryOnPaceNote,
   summarySuccessNote,
 } from '@electron/personalityCopy'
-import { countsAsFinishedPomodoro } from '@electron/sessionFilters'
+import { finishedPomodoroCount } from '@electron/sessionFilters'
 import { addCalendarDays, isObjectiveMet, repeatingPeriodEndDate } from '@electron/objectiveDebt'
 import { countCompletions } from '@electron/objectiveSummary'
 import { currentStreakFromCounts, longestStreakRangeFromCounts } from '@electron/streakCalc'
@@ -846,7 +846,7 @@ export default function AnalyticsView() {
     // Drop a trailing ".0": whole hours read "2h"/"0h", fractions keep one decimal "2.5h".
     return {
       weeklyFocusHours: String(Number(hours.toFixed(1))),
-      weeklyPomodoros: inWeek.filter(countsAsFinishedPomodoro).length,
+      weeklyPomodoros: inWeek.reduce((a, s) => a + finishedPomodoroCount(s), 0),
     }
   }, [allSessions, todayKey])
 
@@ -860,7 +860,7 @@ export default function AnalyticsView() {
     const weekStartMs = now.getTime() - (daysFromMonday * 86_400_000 + (hour * 3600 + minute * 60) * 1000)
     return {
       weekDelta: focusDeltaVsLastWeek(allSessions, weekStartMs, now.getTime()),
-      pomodoroDelta: weekOverWeekDelta(allSessions, weekStartMs, now.getTime(), s => (countsAsFinishedPomodoro(s) ? 1 : 0)),
+      pomodoroDelta: weekOverWeekDelta(allSessions, weekStartMs, now.getTime(), finishedPomodoroCount),
     }
   }, [allSessions, todayKey, tz])
 

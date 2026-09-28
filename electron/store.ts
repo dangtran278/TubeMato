@@ -22,7 +22,7 @@ import { calendarDateKey, resolveTimeZone } from './calendarDate'
 import { normalizeLogFile } from './logNormalize'
 import { pruneObjectiveLogs, OBJECTIVE_LOG_RETENTION_MS } from './objectiveLogPrune'
 import { expiredLogPeriods } from './logRetention'
-import { countsAsFinishedPomodoro } from './sessionFilters'
+import { finishedPomodoroCount } from './sessionFilters'
 import { emptyRoastBagState, type RoastBagState } from './roastBag'
 import { bumpObjectiveRevision } from './objectiveRevision'
 
@@ -232,8 +232,9 @@ export function getDailyPomodoroCounts(): Record<string, number> {
 export function syncDailyPomodoroCounts(): void {
   const fromLogs: Record<string, number> = {}
   for (const s of getAllLoggedSessions()) {
-    if (!countsAsFinishedPomodoro(s)) continue
-    fromLogs[s.date] = (fromLogs[s.date] ?? 0) + 1
+    const count = finishedPomodoroCount(s)
+    if (count === 0) continue
+    fromLogs[s.date] = (fromLogs[s.date] ?? 0) + count
   }
   store.set('dailyPomodoroCounts', { ...store.get('dailyPomodoroCounts'), ...fromLogs })
 }

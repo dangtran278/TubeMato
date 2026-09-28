@@ -1,5 +1,5 @@
 import { addCalendarDays } from './objectiveDebt'
-import { countsAsFinishedPomodoro } from './sessionFilters'
+import { finishedPomodoroCount } from './sessionFilters'
 import type { SessionForFilter } from './sessionFilters'
 
 export interface SessionForStreak extends SessionForFilter {
@@ -111,8 +111,9 @@ export function currentStreakFromCounts(
 function countByDayFromSessions(sessions: SessionForStreak[]): Record<string, number> {
   const countByDay: Record<string, number> = {}
   for (const s of sessions) {
-    if (!countsAsFinishedPomodoro(s)) continue
-    countByDay[s.date] = (countByDay[s.date] ?? 0) + 1
+    const count = finishedPomodoroCount(s)
+    if (count === 0) continue
+    countByDay[s.date] = (countByDay[s.date] ?? 0) + count
   }
   return countByDay
 }

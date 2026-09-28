@@ -1,5 +1,6 @@
 import { addCalendarDays } from '@electron/objectiveDebt'
-import { countsAsFinishedPomodoro } from '@electron/sessionFilters'
+import { finishedPomodoroCount } from '@electron/sessionFilters'
+import type { SessionForFilter } from '@electron/sessionFilters'
 import { isWeekday } from '@electron/streakCalc'
 
 export { isWeekday }
@@ -65,12 +66,13 @@ export function buildDayMap<T>(
 // ─── Per-day aggregations ─────────────────────────────────────────────────────
 
 export function buildPomodoroCountByDay(
-  sessions: { date: string; durationSeconds?: number; naturalComplete?: boolean; segmentOnly?: boolean }[],
+  sessions: (SessionForFilter & { date: string })[],
 ): Record<string, number> {
   const m: Record<string, number> = {}
   for (const s of sessions) {
-    if (!countsAsFinishedPomodoro(s)) continue
-    m[s.date] = (m[s.date] ?? 0) + 1
+    const count = finishedPomodoroCount(s)
+    if (count === 0) continue
+    m[s.date] = (m[s.date] ?? 0) + count
   }
   return m
 }

@@ -26,6 +26,7 @@ export function normalizeLogFile(data: unknown, periodFallback: string): LogFile
         hadPauseDuringWork: typeof s.hadPauseDuringWork === 'boolean' ? s.hadPauseDuringWork : undefined,
         hadPauseDuringInterWorkGapBefore:
           typeof s.hadPauseDuringInterWorkGapBefore === 'boolean' ? s.hadPauseDuringInterWorkGapBefore : undefined,
+        pomodoros: Number.isInteger(s.pomodoros) && (s.pomodoros as number) > 1 ? (s.pomodoros as number) : undefined,
       }))
     : []
 
