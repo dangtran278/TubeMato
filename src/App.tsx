@@ -38,6 +38,7 @@ const NAV: { id: View; icon: string; label: string }[] = [
 import { useTimerEvents } from './hooks/useTimer'
 import Mascot, { CALM_SLEEP_AT } from './components/Mascot/Mascot'
 import { mascotSrc } from './utils/mascot'
+import { useKeyLayer } from './utils/keyLayer'
 
 function getInitialView(): View {
   const v = window.tubemato.app.getInitialNav()
@@ -176,12 +177,7 @@ export default function App() {
   }
 
   // Esc dismisses the About modal, matching its click-anywhere-to-dismiss behavior.
-  useEffect(() => {
-    if (!showAbout) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowAbout(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [showAbout])
+  useKeyLayer(e => { if (e.key === 'Escape') setShowAbout(false) }, showAbout)
 
   useEffect(() => {
     const unsub = window.tubemato.app.onWindowState(setMaximized)

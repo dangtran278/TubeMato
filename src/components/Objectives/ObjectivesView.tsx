@@ -11,6 +11,7 @@ import { GroupBadge } from '../common/GroupBadge'
 import { Tooltip } from '../common/Tooltip'
 import { TrashIcon } from '../common/TrashIcon'
 import { DatePicker } from '../common/DatePicker'
+import { useKeyLayer, useDropdownClose } from '../../utils/keyLayer'
 import { calendarDateKey, resolveTimeZone } from '@electron/calendarDate'
 import { useTodayKey } from '../../hooks/useTodayKey'
 import { firstPeriodDue } from '@electron/recurrence'
@@ -94,6 +95,8 @@ export function GroupInput({ value, onChange, groups, onDeleteOption }: {
     measure()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, value, groups])
+
+  useDropdownClose(open, () => setOpen(false), [ref, menuRef])
 
   useEffect(() => {
     if (!open) return
@@ -212,6 +215,7 @@ export function GroupSwatch({ color, onPick }: { color: string; onPick: (c: stri
       window.removeEventListener('resize', onReflow)
     }
   }, [open])
+  useDropdownClose(open, () => { setOpen(false); setCustomPicker(false) }, [btnRef, menuRef])
 
   return (
     <div className="group-swatch-wrap">
@@ -464,21 +468,15 @@ export function ObjectiveForm({ initial, onSave, onClose }: ObjectiveFormProps) 
   }
 
   // Esc = Cancel, Enter = Save. Buttons/textarea keep their own Enter behavior.
-  const handlers = useRef({ save, onClose })
-  useEffect(() => { handlers.current = { save, onClose } })
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); handlers.current.onClose() }
-      else if (e.key === 'Enter') {
-        const t = e.target as HTMLElement | null
-        if (t && (t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA')) return
-        e.preventDefault()
-        void handlers.current.save()
-      }
+  useKeyLayer(e => {
+    if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    else if (e.key === 'Enter') {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA')) return
+      e.preventDefault()
+      void save()
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  })
 
   // Close only when a press and release both land on the backdrop; a drag starting inside
   // (e.g. selecting text) must not close the form.
@@ -710,11 +708,7 @@ function ObjectiveDeleteDialog({ objective, scheduleCount, onCancel, onConfirm }
   onCancel: () => void
   onConfirm: () => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   // Defer reminder / summary popups while this confirm is open, like the objective form.
   useEffect(() => {
     const ui = useUiStore.getState()
@@ -751,11 +745,7 @@ function GroupDeleteDialog({ name, objectiveCount, onCancel, onConfirm }: {
   onCancel: () => void
   onConfirm: (alsoObjectives: boolean) => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   // Defer reminder / summary popups while this confirm is open, like the objective form.
   useEffect(() => {
     const ui = useUiStore.getState()
@@ -795,11 +785,7 @@ function GroupRenameDialog({ name, onCancel, onSubmit }: {
   const [value, setValue] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => { inputRef.current?.select() }, [])
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   // Defer reminder / summary popups while this dialog is open, like the delete confirm.
   useEffect(() => {
     const ui = useUiStore.getState()
@@ -842,11 +828,7 @@ function GroupMergeDialog({ from, to, objectiveCount, onCancel, onConfirm }: {
   onCancel: () => void
   onConfirm: () => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   useEffect(() => {
     const ui = useUiStore.getState()
     ui.openEditor()

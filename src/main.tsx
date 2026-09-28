@@ -13,9 +13,11 @@ import './index.css'
 import App from './App'
 import { installAnimationGate } from './utils/animationGate'
 import { installPointerFocusRelease } from './utils/pointerFocus'
+import { installTabBlock } from './utils/tabKey'
 
 installAnimationGate()
 installPointerFocusRelease()
+installTabBlock()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -180,6 +180,22 @@ if (process.platform === 'win32') {
   app.commandLine.appendSwitch('disk-cache-size', String(50 * 1024 * 1024))
 }
 
+// The default menu without zoom and (outside dev runs) DevTools. It's hidden on the frameless
+// window, but its shortcuts still fire.
+function installAppMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { label: 'View', submenu: [
+      { role: 'reload' }, { role: 'forceReload' },
+      ...(isDev ? [{ role: 'toggleDevTools' as const }] : []),
+      { type: 'separator' }, { role: 'togglefullscreen' },
+    ] },
+    { role: 'windowMenu' },
+  ]))
+}
+
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 // A tray app must not run twice: two processes would fight over the bridge port (27182) and the
@@ -209,6 +225,7 @@ app.whenReady().then(() => {
   pruneOldLogs() // drop log files older than the retention window (keeps the ~1yr calendar intact)
   // Before any window or the tray exists, so native menus start on the right theme.
   applyThemeSource(currentTheme())
+  installAppMenu()
   // Skip the main window on a hidden login launch; it's created on demand via
   // ensureMainWindow() (tray click / widget timer click).
   if (!startHidden) createMainWindow()

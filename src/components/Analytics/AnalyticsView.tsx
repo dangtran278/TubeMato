@@ -39,6 +39,7 @@ import {
   niceTimeAxis,
 } from '../../utils/analyticsCalc'
 import { mascotSrc } from '../../utils/mascot'
+import { useKeyLayer } from '../../utils/keyLayer'
 import './Analytics.css'
 
 
@@ -581,15 +582,7 @@ export function SummaryModal({ summary, onClose }: { summary: DaySummary; onClos
   }), [dateLabel, summary.date, personality])
 
   // Esc closes (modal convention). Nothing to "save", so Enter is left alone.
-  const onCloseRef = useRef(onClose)
-  useEffect(() => { onCloseRef.current = onClose })
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current() }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  useKeyLayer(e => { if (e.key === 'Escape') { e.preventDefault(); onClose() } })
 
   // Close only when a press AND release both land on the backdrop (not a drag starting inside).
   const downOnBackdrop = useRef(false)

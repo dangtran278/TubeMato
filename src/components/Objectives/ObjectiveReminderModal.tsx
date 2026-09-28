@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import type { ObjectiveReminderItem } from '@electron/types'
 import { useSettingsStore } from '../../store'
 import { formatIsoDateDdMmYyyy } from '../../utils/dateDisplay'
 import { mascotSrc } from '../../utils/mascot'
 import { TitleWithGroup } from '../common/TitleWithGroup'
+import { useKeyLayer } from '../../utils/keyLayer'
 import './ObjectiveReminderModal.css'
 
 interface Props {
@@ -30,15 +31,7 @@ function stripLeadingScore(roast: string): string {
 export default function ObjectiveReminderModal({ title, items, onClose }: Props) {
   const { settings } = useSettingsStore()
   // Esc closes (modal convention). Nothing to "save", so Enter is left alone.
-  const onCloseRef = useRef(onClose)
-  useEffect(() => { onCloseRef.current = onClose })
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current() }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  useKeyLayer(e => { if (e.key === 'Escape') { e.preventDefault(); onClose() } })
 
   // Close only when a press AND release both land on the backdrop (not a drag out of the modal).
   const downOnBackdrop = useRef(false)

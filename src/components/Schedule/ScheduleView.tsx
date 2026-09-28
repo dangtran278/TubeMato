@@ -18,6 +18,7 @@ import { occurrencesInRange } from '@electron/recurrence'
 import { truncateSeriesBefore } from '@electron/scheduleFire'
 import { objectiveOccurrencesInRange, sortActiveObjectives, isObjectiveMet } from '../../utils/objectiveDisplay'
 import { colorForGroupName } from '../../utils/groupDisplay'
+import { useKeyLayer, useDropdownClose } from '../../utils/keyLayer'
 import { scheduleSubtitle, scheduleEmptyLine, scheduleEmptyLadder } from '@electron/personalityCopy'
 import Mascot, { CALM_SLEEP_AT } from '../Mascot/Mascot'
 import {
@@ -299,21 +300,14 @@ function SlotForm({ initial, draft, objectives, today, onSave, onDelete, onClose
     onClose()
   }
 
-  const handlers = useRef({ save, onClose, creating: creatingObjective })
-  useEffect(() => { handlers.current = { save, onClose, creating: creatingObjective } })
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      if (handlers.current.creating) return // the objective form on top owns the keyboard
-      if (ev.key === 'Escape') { ev.preventDefault(); handlers.current.onClose() }
-      else if (ev.key === 'Enter') {
-        const t = ev.target as HTMLElement | null
-        if (t && (t.tagName === 'BUTTON' || t.tagName === 'SELECT')) return
-        ev.preventDefault(); handlers.current.save()
-      }
+  useKeyLayer(ev => {
+    if (ev.key === 'Escape') { ev.preventDefault(); onClose() }
+    else if (ev.key === 'Enter') {
+      const t = ev.target as HTMLElement | null
+      if (t && (t.tagName === 'BUTTON' || t.tagName === 'SELECT')) return
+      ev.preventDefault(); save()
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  })
 
   const downOnBackdrop = useRef(false)
   return (
@@ -617,11 +611,10 @@ export default function ScheduleView() {
         e.stopPropagation()
       }
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPickerOpen(false) }
     document.addEventListener('pointerdown', onDown, true)
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('keydown', onKey) }
+    return () => document.removeEventListener('pointerdown', onDown, true)
   }, [pickerOpen])
+  useDropdownClose(pickerOpen, () => setPickerOpen(false), [monthpickRef])
   // `pokes` only ever climbs; the tier clamps at the meltdown line.
   const [pokes, setPokes] = useState(0)
   // Passive-aggressive escalates through scheduleEmptyLadder; calm nudges once before sleep,

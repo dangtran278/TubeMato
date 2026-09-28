@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { useDropdownClose } from '../../utils/keyLayer'
 import { Tooltip } from './Tooltip'
 import { TrashIcon } from './TrashIcon'
 import { PencilIcon } from './PencilIcon'
@@ -134,6 +135,8 @@ export function CenterSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  useDropdownClose(open, () => setOpen(false), [ref, menuRef])
+
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
@@ -141,16 +144,13 @@ export function CenterSelect({
       if (ref.current?.contains(t) || menuRef.current?.contains(t)) return
       setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     // Capture scroll so we reposition even when an inner container (not window) scrolls.
     const onReflow = () => measure()
     document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
     window.addEventListener('scroll', onReflow, true)
     window.addEventListener('resize', onReflow)
     return () => {
       document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
       window.removeEventListener('scroll', onReflow, true)
       window.removeEventListener('resize', onReflow)
     }

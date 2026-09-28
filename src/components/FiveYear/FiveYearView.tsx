@@ -21,6 +21,7 @@ import {
   OBJECTIVE_TITLE_MAX_LENGTH,
 } from '@electron/types'
 import type { FiveYearGoal } from '@electron/types'
+import { useKeyLayer } from '../../utils/keyLayer'
 import './FiveYear.css'
 
 /* ── goal form (create / edit) ────────────────────────────────────────────── */
@@ -71,13 +72,11 @@ function ActionRow({ value, blank, line, dragging, onChange, onRemove, onDragSta
   )
 }
 
-function GoalForm({ initial, defaultYear, defaultCategory, currentYear, keysPaused, onSave, onDelete, onClose }: {
+function GoalForm({ initial, defaultYear, defaultCategory, currentYear, onSave, onDelete, onClose }: {
   initial?: FiveYearGoal
   defaultYear: number
   defaultCategory?: string
   currentYear: number
-  /** Set while the delete confirm is stacked on top, since both listen for Esc/Enter on `document`. */
-  keysPaused?: boolean
   onSave: (g: FiveYearGoal) => void
   onDelete?: () => void
   onClose: () => void
@@ -213,21 +212,14 @@ function GoalForm({ initial, defaultYear, defaultCategory, currentYear, keysPaus
   }
 
   // Esc = Cancel, Enter = Save (buttons/textarea keep their own Enter behavior).
-  const handlers = useRef({ save, onClose, keysPaused })
-  useEffect(() => { handlers.current = { save, onClose, keysPaused } })
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (handlers.current.keysPaused) return
-      if (e.key === 'Escape') { e.preventDefault(); handlers.current.onClose() }
-      else if (e.key === 'Enter') {
-        const el = e.target as HTMLElement | null
-        if (el && (el.tagName === 'BUTTON' || el.tagName === 'TEXTAREA')) return
-        e.preventDefault(); void handlers.current.save()
-      }
+  useKeyLayer(e => {
+    if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    else if (e.key === 'Enter') {
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'BUTTON' || el.tagName === 'TEXTAREA')) return
+      e.preventDefault(); void save()
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  })
 
   // Close only when a press and release both land on the backdrop (a drag from inside must not close).
   const downOnBackdrop = useRef(false)
@@ -476,11 +468,7 @@ function GoalDeleteDialog({ goal, onCancel, onConfirm }: {
   onCancel: () => void
   onConfirm: () => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   const count = goal.actions.length
   const parts = [
     count > 0 ? (count === 1 ? 'its 1 action' : `its ${count} actions`) : '',
@@ -515,11 +503,7 @@ function CategoryScopeDialog({ name, year, onCancel, onPick }: {
   onCancel: () => void
   onPick: (scope: 'year' | 'all') => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   return createPortal(
     <div className="group-delete-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onCancel() }}>
       <div className="group-delete-modal" role="dialog" aria-modal="true">
@@ -548,11 +532,7 @@ function CategoryDeleteDialog({ name, year, goalCount, onCancel, onConfirm }: {
   onCancel: () => void
   onConfirm: (alsoGoals: boolean) => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   const scope = year !== undefined ? ` in ${year}` : ''
   const label = goalCount === 1 ? '1 goal' : `${goalCount} goals`
   return createPortal(
@@ -586,11 +566,7 @@ function CategoryRenameDialog({ name, onCancel, onSubmit }: {
   const [value, setValue] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => { inputRef.current?.select() }, [])
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   const trimmed = value.trim()
   const submit = () => { if (trimmed) onSubmit(trimmed) }
   const downOnBackdrop = useRef(false)
@@ -626,11 +602,7 @@ function CategoryMergeDialog({ from, to, goalCount, onCancel, onConfirm }: {
   onCancel: () => void
   onConfirm: () => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
   const label = goalCount === 1 ? '1 goal' : `${goalCount} goals`
   return createPortal(
     <div className="group-delete-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onCancel() }}>
@@ -950,7 +922,6 @@ export default function FiveYearView() {
           defaultYear={editing.year}
           defaultCategory={editing.category}
           currentYear={currentYear}
-          keysPaused={!!pendingGoalDelete}
           onSave={g => void saveGoal(g)}
           onDelete={editing.goal ? () => setPendingGoalDelete(editing.goal!) : undefined}
           onClose={() => setEditing(null)}

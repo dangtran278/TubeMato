@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Personality } from '@electron/types'
 import { closeDialogTitle, closeDialogBody } from '@electron/personalityCopy'
+import { useKeyLayer } from '../../utils/keyLayer'
 import './CloseDialog.css'
 
 /** Title-bar ✕ while the Close button setting is Ask. "Don't ask again" saves the clicked choice. */
@@ -20,11 +21,7 @@ export default function CloseDialog({ personality, onCancel }: {
     else window.tubemato.app.close()
   }
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useKeyLayer(e => { if (e.key === 'Escape') onCancel() })
 
   const downOnBackdrop = useRef(false)
   return (

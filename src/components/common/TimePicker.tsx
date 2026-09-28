@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useDropdownClose } from '../../utils/keyLayer'
 import { SegmentedInput, type Segment } from './SegmentedInput'
 import './TimePicker.css'
 
@@ -91,6 +92,8 @@ export function TimePicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  useDropdownClose(open, () => setOpen(false), [ref, menuRef])
+
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
@@ -98,15 +101,12 @@ export function TimePicker({
       if (ref.current?.contains(t) || menuRef.current?.contains(t)) return
       setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     const onReflow = () => measure()
     document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
     window.addEventListener('scroll', onReflow, true)
     window.addEventListener('resize', onReflow)
     return () => {
       document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
       window.removeEventListener('scroll', onReflow, true)
       window.removeEventListener('resize', onReflow)
     }
