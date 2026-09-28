@@ -1,6 +1,6 @@
 {
   "name": "TubeMato",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Pomodoro timer with YouTube integration and a history of your failures",
   "author": {
     "name": "Dantern"
@@ -8,6 +8,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:test": "node scripts/dev-test.js",
     "build": "tsc && vite build",
     "clean:package-artifacts": "node scripts/clean-package-output.js",
     "electron:build": "npm run clean:package-artifacts && node scripts/build-win-icon.js && npm run build && electron-builder --win nsis --x64 --publish=never",
@@ -18,6 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "node scripts/seed-dev-data.js",
+    "seed:test": "node scripts/test-profile.js --fresh --seed",
+    "test-profile": "node scripts/test-profile.js",
     "generate-icons": "node scripts/generate-icons.js",
     "generate-extension-icons": "node scripts/generate-extension-icons.js",
     "generate-menu-icons": "electron scripts/generate-menu-icons.js",

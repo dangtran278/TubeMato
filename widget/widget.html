@@ -3,8 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Set theme before first paint; main process passes ?theme= when loading the widget. -->
-    <script>document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') || 'dark';</script>
+    <!-- Set theme and size before first paint; main passes ?theme= and ?size= when loading. -->
+    <script>
+      const q = new URLSearchParams(location.search);
+      document.documentElement.dataset.theme = q.get('theme') || 'dark';
+      document.documentElement.dataset.size = q.get('size') || 'normal';
+    </script>
     <script type="module" src="./fonts.ts"></script>
     <script type="module" src="./audio.ts"></script>
     <title>TubeMato Widget</title>
@@ -27,17 +31,43 @@
         user-select: none;
       }
 
+      /* Size tokens. data-size is set from ?size= before first paint and again on settings
+         change; the pixel width/height live in main.ts and reach here as the window bounds. */
+      :root {
+        --pad: 14px;
+        --gap: 12px;
+        --timer-fs: 28px;
+        --timer-mw: 80px;
+        --btn: 30px;
+        --glyph-fs: 13px;
+        --radius: 16px;
+      }
+      :root[data-size="compact"] {
+        --pad: 8px;
+        --gap: 6px;
+        --timer-fs: 17px;
+        /* 6 characters, not the 5 a normal session shows: an overdue session counts up past
+           an hour, and formatTime caps the display at 999:59 - so six is also the most it can be. */
+        --timer-mw: 61px;
+        --btn: 22px;
+        --glyph-fs: 11px;
+        /* 16px on a 38px-tall pill reads as a lozenge and crowds the play button's corner. */
+        --radius: 11px;
+      }
+
       .widget {
-        width: 290px;
-        height: 60px;
+        /* Not 290x60: one definition of the size, and it is the window's. A CSS box that
+           disagreed with the bounds would leave a transparent lip that eats clicks. */
+        width: 100%;
+        height: 100%;
         background: rgba(15, 15, 19, 0.85);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
+        border-radius: var(--radius);
         backdrop-filter: blur(12px);
         display: flex;
         align-items: center;
-        padding: 0 14px;
-        gap: 12px;
+        padding: 0 var(--pad);
+        gap: var(--gap);
         cursor: default;
       }
       .widget.dragging {
@@ -46,13 +76,12 @@
 
       .widget__timer {
         font-family: "JetBrains Mono", monospace;
-        font-size: 28px;
+        font-size: var(--timer-fs);
         font-weight: 500;
         letter-spacing: -0.02em;
         color: #f0f0f5;
-        min-width: 80px;
+        min-width: var(--timer-mw);
         line-height: 1;
-        cursor: pointer;
       }
 
       .widget__timer--break {
@@ -94,6 +123,9 @@
       .widget__dots {
         display: flex;
         gap: 4px;
+        /* Clip rather than shove the buttons out of the window - formatTime's 999:59 cap means
+           this shouldn't fire, but a future wider timer should hide a dot, not lose a button. */
+        overflow: hidden;
       }
       /* Compact "done/total" shown in place of the dots when the interval is too high to fit. */
       .widget__dots--count {
@@ -123,8 +155,8 @@
       }
 
       .widget__btn {
-        width: 30px;
-        height: 30px;
+        width: var(--btn);
+        height: var(--btn);
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.06);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -142,7 +174,15 @@
       .widget__btn--glyph {
         padding-bottom: 2px;
         padding-top: 0;
-        font-size: 13px;
+        font-size: var(--glyph-fs);
+      }
+      /* U+25B6 needs one more pixel than the rest. None of these glyphs are in the bundled Inter
+         subset, so they render from the system symbol font, where the triangle's ink is 3px taller
+         than U+23F8's and U+23ED's and sits 1 DIP higher inside the same box. The rule above shifts
+         all three together, so it cannot close that gap - only extra padding on the triangle itself can.
+         Must come after --glyph: same specificity, so source order is what wins the padding-top. */
+      .widget__btn--play {
+        padding-top: 1px;
       }
       .widget__btn:hover {
         background: rgba(255, 255, 255, 0.12);
@@ -173,6 +213,22 @@
       }
       .widget__btn--hidden {
         display: none !important;
+      }
+
+      /* Compact carries only the timer and play button; skip/+1 move to the right-click menu, and
+         .widget__info goes with them rather than staying as an empty spacer. !important because
+         .widget__btn--extend.is-visible would otherwise tie on specificity. */
+      :root[data-size="compact"] .widget__label,
+      :root[data-size="compact"] .widget__dots,
+      :root[data-size="compact"] .widget__info,
+      :root[data-size="compact"] .widget__btn--skip,
+      :root[data-size="compact"] .widget__btn--extend {
+        display: none !important;
+      }
+      /* With .widget__info gone the timer is the only flexible box left, so it takes the slack
+         and keeps the button pinned right instead of the pair drifting apart or centre. */
+      :root[data-size="compact"] .widget__timer {
+        flex: 1;
       }
 
       @keyframes flash {
@@ -254,8 +310,8 @@
         <div class="widget__dots" id="dots"></div>
       </div>
       <div class="widget__controls">
-        <button class="widget__btn widget__btn--glyph widget__btn--primary" id="btn-play">▶</button>
-        <button class="widget__btn widget__btn--glyph" id="btn-skip">⏭</button>
+        <button class="widget__btn widget__btn--glyph widget__btn--play widget__btn--primary" id="btn-play">▶</button>
+        <button class="widget__btn widget__btn--glyph widget__btn--skip" id="btn-skip">⏭</button>
         <button class="widget__btn widget__btn--extend" id="btn-extend">+1</button>
       </div>
     </div>
@@ -295,6 +351,7 @@
         notifyVol = (s.notifyVolume ?? 100) / 100;
         widgetClickTab = s.widgetClickTab ?? "timer";
         personality = s.personality ?? "passive-aggressive";
+        document.documentElement.dataset.size = s.widgetSize ?? "normal";
       }
 
       window.tubemato.settings.get().then(applySettings);
@@ -393,10 +450,10 @@
         } else if (isGrace || isProc) {
           // Highlighted "Start Work" button
           btnPlay.textContent = "▶";
-          btnPlay.className = "widget__btn widget__btn--glyph widget__btn--warn";
+          btnPlay.className = "widget__btn widget__btn--glyph widget__btn--play widget__btn--warn";
         } else {
           btnPlay.textContent = "▶";
-          btnPlay.className = "widget__btn widget__btn--glyph widget__btn--primary";
+          btnPlay.className = "widget__btn widget__btn--glyph widget__btn--play widget__btn--primary";
         }
 
         // ── Extend / skip (use classes; inline display:flex broke flex centering vs stylesheet) ──
@@ -406,25 +463,42 @@
       }
 
       // ── JS drag (replaces -webkit-app-region so right-click fires everywhere) ──
+      // Press-drag-release: everything but the controls is both drag handle and click-to-open
+      // target; the release decides which it was.
+      const DRAG_SLOP = 3; // a real click carries a pixel or two of hand tremor
       let prevScreenX = 0;
       let prevScreenY = 0;
+      let downScreenX = 0;
+      let downScreenY = 0;
       let isDragging = false;
+      let moved = false;
 
       const widgetEl = document.getElementById("widget");
 
       widgetEl.addEventListener("mousedown", (e) => {
         if (e.button !== 0) return;
-        // Allow normal interaction on controls and the timer click-to-open
-        if (e.target.closest(".widget__controls, .widget__timer")) return;
+        // Allow normal interaction on the controls
+        if (e.target.closest(".widget__controls")) return;
         isDragging = true;
-        prevScreenX = e.screenX;
-        prevScreenY = e.screenY;
-        widgetEl.classList.add("dragging");
+        moved = false;
+        prevScreenX = downScreenX = e.screenX;
+        prevScreenY = downScreenY = e.screenY;
         e.preventDefault();
       });
 
       window.addEventListener("mousemove", (e) => {
         if (!isDragging) return;
+        if (!moved) {
+          if (
+            Math.abs(e.screenX - downScreenX) < DRAG_SLOP &&
+            Math.abs(e.screenY - downScreenY) < DRAG_SLOP
+          )
+            return;
+          moved = true;
+          widgetEl.classList.add("dragging");
+        }
+        // prevScreen* only advances once a move is sent, so the first send past the threshold
+        // carries the whole travel since mousedown - the delay loses no motion.
         const dx = e.screenX - prevScreenX;
         const dy = e.screenY - prevScreenY;
         if (dx !== 0 || dy !== 0) {
@@ -438,6 +512,7 @@
         if (!isDragging) return;
         isDragging = false;
         widgetEl.classList.remove("dragging");
+        if (!moved) window.tubemato.app.showMainAt(widgetClickTab);
       });
 
       // Right-click anywhere on the widget → main process shows the context menu.
@@ -482,12 +557,6 @@
         else if (type === "overdue-start") window._tmaudio.playOverdueAlert(alertVol);
         else if (type === "schedule-alert") window._tmaudio.playScheduleAlert(scheduleAlertVol);
         else if (type === "notify-alert") window._tmaudio.playNotifyAlert(notifyVol);
-      });
-
-      timerEl.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        window.tubemato.app.showMainAt(widgetClickTab);
       });
     </script>
   </body>

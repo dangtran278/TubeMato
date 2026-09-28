@@ -21,7 +21,7 @@ import {
   procrastinationNudgeTitle,
   procrastinationNudgeBody,
 } from './personalityCopy'
-import type { Objective, TimerSession, BellType, ScheduleSlot, FiveYearGoal, AppNotification, Settings, Personality, ObjectiveReminderPayload } from './types'
+import type { Objective, TimerSession, TimerState, BellType, ScheduleSlot, FiveYearGoal, AppNotification, Settings, Personality, WidgetSize, ObjectiveReminderPayload } from './types'
 import { calendarDateKey, resolveTimeZone, wallClockHourMinute } from './calendarDate'
 import {
   sendYtCommand, sendYtCommandToAllTabs, sendYtCommandToAllTabsExcept, createCommandServer,
@@ -366,6 +366,18 @@ function createMainWindow() {
 
 const WIDGET_W = 290
 const WIDGET_H = 60
+// Compact is the timer and play button only: label and pomodoro dots are dropped, skip/+1 move
+// to the right-click menu.
+//
+// 105 = 8 padding + 61 timer + 6 gap + 22 button + 8 padding. The timer is budgeted at 6
+// characters (formatTime's ceiling) rather than the 5 a normal session shows, so a long overdue
+// render like 127:45 never clips.
+//
+// 38 is a floor, not a choice: Electron/the OS round a shorter requested height up to their own
+// minimum, so widgetBox states 38 to keep describing the window that actually exists. Width has
+// no such floor.
+const WIDGET_COMPACT_W = 105
+const WIDGET_COMPACT_H = 38
 const MASCOT_W = 400
 const MASCOT_H = 460
 const MASCOT_GLOW_PAD = 50  // horizontal glow room to the right of the 300px mascot
@@ -377,25 +389,41 @@ const MASCOT_VPAD = 80
 // reading Windows' bounds and writing them back drifts a pixel or two per call.
 let mascotSize = { width: MASCOT_W, height: MASCOT_H }
 
-/** Returns `pos` unchanged if at least MIN_VISIBLE_X/Y px of the widget overlaps any display's work area; otherwise resets to top-center of primary display. */
+// Same contract for the widget, which additionally varies with the widgetSize setting. Every
+// reposition passes this; the WIDGET_W/H constants are only read to build it.
+let widgetBox = { width: WIDGET_W, height: WIDGET_H }
+
+function boxForWidgetSize(size: WidgetSize) {
+  return size === 'compact'
+    ? { width: WIDGET_COMPACT_W, height: WIDGET_COMPACT_H }
+    : { width: WIDGET_W, height: WIDGET_H }
+}
+
+/** Returns `pos` unchanged if enough of the widget overlaps any display's work area; otherwise resets to top-center of primary display. */
 function clampWidgetPosition(pos: { x: number; y: number }): { x: number; y: number } {
-  const MIN_VISIBLE_X = 275
-  const MIN_VISIBLE_Y = 40
+  const { width: w, height: h } = widgetBox
+  // Fractions, not the absolute 275/40 these used to be: compact is smaller than those thresholds,
+  // so they could never be met and every compact widget would "reset" on show.
+  const MIN_VISIBLE_X = Math.round(w * 0.95)
+  const MIN_VISIBLE_Y = Math.round(h * 0.67)
   for (const d of screen.getAllDisplays()) {
     const { x, y, width, height } = d.workArea
-    const overlapX = Math.min(pos.x + WIDGET_W, x + width) - Math.max(pos.x, x)
-    const overlapY = Math.min(pos.y + WIDGET_H, y + height) - Math.max(pos.y, y)
+    const overlapX = Math.min(pos.x + w, x + width) - Math.max(pos.x, x)
+    const overlapY = Math.min(pos.y + h, y + height) - Math.max(pos.y, y)
     if (overlapX >= MIN_VISIBLE_X && overlapY >= MIN_VISIBLE_Y) return pos
   }
   const primary = screen.getPrimaryDisplay().workArea
-  return { x: primary.x + Math.round((primary.width - WIDGET_W) / 2), y: primary.y + 20 }
+  return { x: primary.x + Math.round((primary.width - w) / 2), y: primary.y + 20 }
 }
 
 function createWidgetWindow() {
+  // Before clampWidgetPosition - it sizes its visibility thresholds from widgetBox.
+  const widgetSize = store.get('settings').widgetSize ?? 'normal'
+  widgetBox = boxForWidgetSize(widgetSize)
   const pos = clampWidgetPosition(store.get('settings').miniWidgetPosition)
   widgetWindow = new BrowserWindow({
-    width: WIDGET_W,
-    height: WIDGET_H,
+    width: widgetBox.width,
+    height: widgetBox.height,
     x: pos.x,
     y: pos.y,
     frame: false,
@@ -417,13 +445,13 @@ function createWidgetWindow() {
   // for, 292x62 measured (438x93 physical at 150%). Tiny, but it's the same transparent surplus as
   // the drag bug - it eats clicks on whatever sits under that lip - and nothing else resizes the
   // window afterwards, so it would survive until the first drag. setBounds lands exact.
-  widgetWindow.setBounds({ x: pos.x, y: pos.y, width: WIDGET_W, height: WIDGET_H })
+  widgetWindow.setBounds({ x: pos.x, y: pos.y, width: widgetBox.width, height: widgetBox.height })
 
   const theme = currentTheme()
   if (isDev) {
-    widgetWindow.loadURL(`http://localhost:5173/widget/widget.html?theme=${theme}`)
+    widgetWindow.loadURL(`http://localhost:5173/widget/widget.html?theme=${theme}&size=${widgetSize}`)
   } else {
-    widgetWindow.loadFile(path.join(__dirname, '../dist/widget/widget.html'), { query: { theme } })
+    widgetWindow.loadFile(path.join(__dirname, '../dist/widget/widget.html'), { query: { theme, size: widgetSize } })
   }
 
   widgetWindow.once('ready-to-show', () => applyWindowIcon(widgetWindow))
@@ -665,15 +693,22 @@ function objectiveMenuItems(): Electron.MenuItemConstructorOptions[] {
   return items
 }
 
+/** Which timer controls are worth offering in a menu right now. Shared by the tray menu and the
+ *  widget's context menu, which is where compact mode's skip and +1 live. */
+function timerMenuGates(st: TimerState) {
+  return {
+    // Skip is meaningful only when there's an active block to end; in grace/overdue
+    // it duplicates the primary "Start Work", and in idle it's a no-op.
+    canSkip: st === 'running' || st === 'paused' || st === 'break-short' || st === 'break-long',
+    // extendBreak() also accepts grace/overdue (it reopens a 1-min break), matching the UI.
+    canExtend: st === 'break-short' || st === 'break-long' || st === 'grace' || st === 'procrastinating',
+    canExtendWork: st === 'running' || st === 'paused',
+  }
+}
+
 function buildTrayMenu() {
   const session = timer.getSession()
-  const st = session.state
-  // Skip is meaningful only when there's an active block to end; in grace/overdue
-  // it duplicates the primary "Start Work", and in idle it's a no-op.
-  const canSkip = st === 'running' || st === 'paused' || st === 'break-short' || st === 'break-long'
-  // extendBreak() also accepts grace/overdue (it reopens a 1-min break), matching the UI.
-  const canExtend = st === 'break-short' || st === 'break-long' || st === 'grace' || st === 'procrastinating'
-  const canExtendWork = st === 'running' || st === 'paused'
+  const { canSkip, canExtend, canExtendWork } = timerMenuGates(session.state)
 
   return Menu.buildFromTemplate([
     {
@@ -871,7 +906,7 @@ function mascotDataUrl(): string | undefined {
   const personality = (store.get('settings') as Settings).personality
   if (mascotDataUrlCache[personality] === undefined) {
     const img = getNotificationIcon(personality)
-    // The card renders it at ~34px; downscaling the 256px source avoids ~30x the IPC payload for no visible gain.
+    // Downscaled before encoding: the card shows this far smaller than the 256px source, and sending it full-size would bloat every notification's IPC payload for nothing visible.
     mascotDataUrlCache[personality] = img ? img.resize({ width: 48 }).toDataURL() : ''
   }
   return mascotDataUrlCache[personality] || undefined
@@ -1211,9 +1246,24 @@ function quitApp() {
 
 // ─── Widget toggle ────────────────────────────────────────────────────────────
 
-function buildWidgetContextMenu() {
+/** `reopen` is called after an item that should leave the menu up. Native menu items always
+ *  dismiss - Electron has no `closeOnClick` - so the caller re-pops instead. */
+function buildWidgetContextMenu(reopen: () => void, objectiveItems = objectiveMenuItems()) {
+  // Compact hides skip and +1 on the pill, so the menu is their only home. Normal mode has both
+  // as buttons and doesn't repeat them here.
+  const compact = (store.get('settings').widgetSize ?? 'normal') === 'compact'
+  const { canSkip, canExtend, canExtendWork } = timerMenuGates(timer.getSession().state)
+  const timerItems = compact ? [
+    ...(canSkip ? [{ label: 'Skip', icon: loadMenuIcon('skip'), click: () => skipTimer() }] : []),
+    // +1 is the one item with a natural repeat, so it reopens the menu rather than ending it.
+    ...(canExtendWork ? [{ label: '+1 min Focus', icon: loadMenuIcon('focus'), click: () => { timer.extendWork(); reopen() } }] : []),
+    ...(canExtend ? [{ label: '+1 min Break', icon: loadMenuIcon('break'), click: () => { timer.extendBreak(); reopen() } }] : []),
+  ] : []
+
   return Menu.buildFromTemplate([
-    { label: 'Objective', icon: loadMenuIcon('objective'), submenu: objectiveMenuItems() },
+    ...timerItems,
+    ...(timerItems.length ? [{ type: 'separator' as const }] : []),
+    { label: 'Objective', icon: loadMenuIcon('objective'), submenu: objectiveItems },
     { type: 'separator' as const },
     {
       label: 'Hide Widget',
@@ -1243,7 +1293,7 @@ function applyWidgetVisibility(show: boolean) {
     // setBounds over setPosition for the same size-drift reason as IPC.WIDGET_MOVE; this one fires
     // once per show rather than per mousemove, so it creeps far slower, but it creeps.
     if (clamped.x !== wx || clamped.y !== wy) {
-      widgetWindow.setBounds({ x: clamped.x, y: clamped.y, width: WIDGET_W, height: WIDGET_H })
+      widgetWindow.setBounds({ x: clamped.x, y: clamped.y, width: widgetBox.width, height: widgetBox.height })
     }
     widgetWindow.show()
   } else {
@@ -1257,6 +1307,115 @@ function toggleWidget() {
   store.set('settings', { ...settings, showMiniWidget: show })
   invalidateTray()
   applyWidgetVisibility(show)
+}
+
+/** Positions and plays the overdue jumpscare beside the widget. Extracted from the IPC handler
+ *  so a widget resize can replay it - the mascot's side and vertical origin are derived from
+ *  the widget box, so the old placement is wrong the moment that box changes. */
+function showMascot() {
+  // The overdue jumpscare is passive-aggressive personality; calm mode never summons it.
+  if (store.get('settings').personality === 'calm') return
+  if (!widgetWindow || widgetWindow.isDestroyed()) return
+  const [wx, wy] = widgetWindow.getPosition()
+  const wa = screen.getDisplayNearestPoint({ x: wx, y: wy }).workArea
+  // The overlay scales its settled size to this; the jumpscare itself is full size either way.
+  const mascotRestSize = store.get('settings').widgetSize ?? 'normal'
+
+  // Mascot appears on whichever side of the widget has more room (opposite the widget's screen half).
+  const widgetCenterX = wx + Math.round(widgetBox.width / 2)
+  const mascotSide: 'left' | 'right' = widgetCenterX > wa.x + wa.width / 2 ? 'left' : 'right'
+  // left: overlay right edge = widget left edge (MASCOT_GLOW_PAD keeps glow unclipped)
+  // right: overlay left edge = widget right edge (same pad on the other side)
+  const ox = mascotSide === 'left'
+    ? wx - MASCOT_W + MASCOT_GLOW_PAD
+    : wx + widgetBox.width - MASCOT_GLOW_PAD
+
+  // Picks a vertical growth direction so the jumpscare isn't clipped by a screen edge; the
+  // mascot's transform-origin stays on the widget's vertical center in every mode.
+  const widgetCenterY = wy + Math.round(widgetBox.height / 2)
+  const centeredTop = widgetCenterY - Math.round(MASCOT_H / 2)
+  let mascotMode: 'center' | 'up' | 'down'
+  let oy: number
+  if (centeredTop < wa.y) {
+    // Widget hugs the top → grow downward (origin = mascot's top edge).
+    mascotMode = 'down'
+    oy = widgetCenterY - MASCOT_VPAD
+  } else if (centeredTop + MASCOT_H > wa.y + wa.height) {
+    // Widget hugs the bottom → grow upward (origin = mascot's bottom edge).
+    mascotMode = 'up'
+    oy = widgetCenterY - (MASCOT_H - MASCOT_VPAD)
+  } else {
+    mascotMode = 'center'
+    oy = centeredTop
+  }
+  // No on-screen clamp: clamping the window would drag the mascot away from the widget near a
+  // screen edge, so the transparent window is left to overhang instead (only its empty margin clips).
+
+  if (!mascotWindow || mascotWindow.isDestroyed()) {
+    mascotWindow = new BrowserWindow({
+      width: MASCOT_W,
+      height: MASCOT_H,
+      x: ox,
+      y: oy,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: false,
+      focusable: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    })
+    // Pin bounds after construction - same size drift as the widget's constructor.
+    mascotWindow.setBounds({ x: ox, y: oy, width: MASCOT_W, height: MASCOT_H })
+    mascotSize = { width: MASCOT_W, height: MASCOT_H }
+    if (isDev) {
+      mascotWindow.loadURL('http://localhost:5173/widget/mascot-overlay.html')
+    } else {
+      mascotWindow.loadFile(path.join(__dirname, '../dist/widget/mascot-overlay.html'))
+    }
+    mascotWindow.on('closed', () => { mascotWindow = null })
+    // The overlay no longer auto-plays; trigger it once its renderer is ready.
+    mascotWindow.webContents.once('did-finish-load', () => {
+      mascotWindow?.webContents.send(IPC.MASCOT_PLAY, mascotMode, mascotSide, mascotRestSize)
+    })
+  } else {
+    // Also resets any previous settle, here and in the overlay's own anchoring.
+    mascotWindow.setBounds({ x: ox, y: oy, width: MASCOT_W, height: MASCOT_H })
+    mascotSize = { width: MASCOT_W, height: MASCOT_H }
+    mascotWindow.show()
+    mascotWindow.webContents.send(IPC.MASCOT_PLAY, mascotMode, mascotSide, mascotRestSize)
+  }
+}
+
+/** Switches the widget between the normal and compact forms. Re-anchors the saved position
+ *  against the OLD box before resizing, or a widget parked flush right leaves a gap when it
+ *  shrinks and grows off-screen when it expands - which half of the display it sits in decides
+ *  which edge stays put. */
+function applyWidgetSize(size: WidgetSize) {
+  const prev = widgetBox
+  const next = boxForWidgetSize(size)
+  if (prev.width === next.width && prev.height === next.height) return
+  widgetBox = next
+  if (!widgetWindow || widgetWindow.isDestroyed()) return
+
+  const b = widgetWindow.getBounds()
+  const wa = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea
+  const keepRight = b.x + prev.width / 2 > wa.x + wa.width / 2
+  const keepBottom = b.y + prev.height / 2 > wa.y + wa.height / 2
+  const pos = clampWidgetPosition({
+    x: keepRight ? b.x + (prev.width - next.width) : b.x,
+    y: keepBottom ? b.y + (prev.height - next.height) : b.y,
+  })
+  widgetWindow.setBounds({ x: pos.x, y: pos.y, width: next.width, height: next.height })
+  store.set('settings', { ...store.get('settings'), miniWidgetPosition: { x: pos.x, y: pos.y } })
+
+  // The mascot's placement was derived from the old box, so replay it against the new one
+  // rather than nudging a possibly-already-settled overlay.
+  if (mascotWindow && !mascotWindow.isDestroyed() && mascotWindow.isVisible()) showMascot()
 }
 
 // ─── Auto-launch ──────────────────────────────────────────────────────────────
@@ -1278,10 +1437,9 @@ function applyAutoLaunch() {
 
 // ─── End-of-day summary scheduler ────────────────────────────────────────────
 
-/** Open the main window and hand the renderer the pending reminder payload. Used by the
- *  reminder toast's click handler and the once-a-day auto-pop when the window is already up.
- *  The auto-pop passes the payload it just built; a toast click arrives cold and re-derives it, so
- *  counts are current even if the click comes hours after the toast. */
+/** Open the main window with the pending reminder payload. Used by the reminder toast's click
+ *  handler and the once-a-day auto-pop; the auto-pop passes what it just built, a toast click
+ *  re-derives it cold so counts stay current hours later. */
 function presentObjectiveReminder(payload?: ObjectiveReminderPayload) {
   // Clicking the toast must never no-op, even if the payload was since cleared.
   ensureMainWindow()
@@ -1387,6 +1545,10 @@ function registerIPC() {
     // setting and the actual window can never disagree, whoever wrote the value.
     const nextShowWidget = Boolean(store.get('settings').showMiniWidget)
     if (nextShowWidget !== Boolean(current.showMiniWidget)) applyWidgetVisibility(nextShowWidget)
+    // After the visibility reconcile: applyWidgetSize is a no-op with no window, and creating one
+    // already sizes it from the stored setting.
+    const nextWidgetSize = (store.get('settings').widgetSize ?? 'normal') as WidgetSize
+    if (nextWidgetSize !== (current.widgetSize ?? 'normal')) applyWidgetSize(nextWidgetSize)
     widgetWindow?.webContents.send(IPC.SETTINGS_CHANGE, store.get('settings'))
   })
 
@@ -1482,8 +1644,8 @@ function registerIPC() {
     widgetWindow.setBounds({
       x: Math.round(wx + dx),
       y: Math.round(wy + dy),
-      width: WIDGET_W,
-      height: WIDGET_H,
+      width: widgetBox.width,
+      height: widgetBox.height,
     })
     // Mascot rides the same delta, using mascotSize rather than MASCOT_W/H so a drag after it
     // settles doesn't re-inflate it.
@@ -1531,95 +1693,52 @@ function registerIPC() {
     // showInactive would defeat the point - the host has to actually hold focus for the menu to
     // dismiss itself on click-away.
     menuHost.show()
-    buildWidgetContextMenu().popup({
-      window: menuHost,
-      callback: () => {
+
+    // Anchor every popup at the cursor's position when the menu was first requested, in host-window
+    // coordinates. A re-pop that fell back to popup's cursor default would walk the menu down-right
+    // by one item each time, since the pointer is over the item that was just clicked.
+    const cursor = screen.getCursorScreenPoint()
+    const anchorX = cursor.x - b.x
+    const anchorY = cursor.y - b.y
+
+    // Built once per menu session rather than once per popup: objectiveMenuItems() re-reads every
+    // objective and re-indexes every completion log, and the only item that re-pops is +1, which
+    // can't change either. The timer items are rebuilt each time - those do move.
+    const objectiveItems = objectiveMenuItems()
+
+    let reopening = false
+    const showMenu = () => {
+      // The host is destroyed on a deferred task, so a dismissal racing this re-pop could have
+      // taken it out from under us.
+      if (menuHost.isDestroyed()) {
         widgetMenuOpen = false
-        // Deferred: destroying the host inside this callback crashed the app when the dismissal
-        // was itself a click landing on the host.
-        setImmediate(() => {
-          if (!menuHost.isDestroyed()) menuHost.destroy()
-        })
-      },
-    })
-  })
-
-  ipcMain.on(IPC.MASCOT_SHOW, () => {
-    // The overdue jumpscare is passive-aggressive personality; calm mode never summons it.
-    if (store.get('settings').personality === 'calm') return
-    if (!widgetWindow || widgetWindow.isDestroyed()) return
-    const [wx, wy] = widgetWindow.getPosition()
-    const wa = screen.getDisplayNearestPoint({ x: wx, y: wy }).workArea
-
-    // Mascot appears on whichever side of the widget has more room (opposite the widget's screen half).
-    const widgetCenterX = wx + Math.round(WIDGET_W / 2)
-    const mascotSide: 'left' | 'right' = widgetCenterX > wa.x + wa.width / 2 ? 'left' : 'right'
-    // left: overlay right edge = widget left edge (MASCOT_GLOW_PAD keeps glow unclipped)
-    // right: overlay left edge = widget right edge (same pad on the other side)
-    const ox = mascotSide === 'left'
-      ? wx - MASCOT_W + MASCOT_GLOW_PAD
-      : wx + WIDGET_W - MASCOT_GLOW_PAD
-
-    // Picks a vertical growth direction so the jumpscare isn't clipped by a screen edge; the
-    // mascot's transform-origin stays on the widget's vertical center in every mode.
-    const widgetCenterY = wy + Math.round(WIDGET_H / 2)
-    const centeredTop = widgetCenterY - Math.round(MASCOT_H / 2)
-    let mascotMode: 'center' | 'up' | 'down'
-    let oy: number
-    if (centeredTop < wa.y) {
-      // Widget hugs the top → grow downward (origin = mascot's top edge).
-      mascotMode = 'down'
-      oy = widgetCenterY - MASCOT_VPAD
-    } else if (centeredTop + MASCOT_H > wa.y + wa.height) {
-      // Widget hugs the bottom → grow upward (origin = mascot's bottom edge).
-      mascotMode = 'up'
-      oy = widgetCenterY - (MASCOT_H - MASCOT_VPAD)
-    } else {
-      mascotMode = 'center'
-      oy = centeredTop
-    }
-    // No on-screen clamp: clamping the window would drag the mascot away from the widget near a
-    // screen edge, so the transparent window is left to overhang instead (only its empty margin clips).
-
-    if (!mascotWindow || mascotWindow.isDestroyed()) {
-      mascotWindow = new BrowserWindow({
-        width: MASCOT_W,
-        height: MASCOT_H,
-        x: ox,
-        y: oy,
-        frame: false,
-        transparent: true,
-        alwaysOnTop: true,
-        skipTaskbar: true,
-        resizable: false,
-        focusable: false,
-        webPreferences: {
-          preload: path.join(__dirname, 'preload.js'),
-          contextIsolation: true,
-          nodeIntegration: false,
+        return
+      }
+      buildWidgetContextMenu(() => { reopening = true }, objectiveItems).popup({
+        window: menuHost,
+        x: anchorX,
+        y: anchorY,
+        callback: () => {
+          // A re-pop closes the menu first, so this fires then too. Clearing the guard or
+          // destroying the host there would tear down the menu that's about to come back.
+          if (reopening) {
+            reopening = false
+            setImmediate(showMenu)
+            return
+          }
+          widgetMenuOpen = false
+          // Deferred: destroying the host inside this callback crashed the app when the dismissal
+          // was itself a click landing on the host.
+          setImmediate(() => {
+            if (!menuHost.isDestroyed()) menuHost.destroy()
+          })
         },
       })
-      // Pin bounds after construction - same size drift as the widget's constructor.
-      mascotWindow.setBounds({ x: ox, y: oy, width: MASCOT_W, height: MASCOT_H })
-      mascotSize = { width: MASCOT_W, height: MASCOT_H }
-      if (isDev) {
-        mascotWindow.loadURL('http://localhost:5173/widget/mascot-overlay.html')
-      } else {
-        mascotWindow.loadFile(path.join(__dirname, '../dist/widget/mascot-overlay.html'))
-      }
-      mascotWindow.on('closed', () => { mascotWindow = null })
-      // The overlay no longer auto-plays; trigger it once its renderer is ready.
-      mascotWindow.webContents.once('did-finish-load', () => {
-        mascotWindow?.webContents.send(IPC.MASCOT_PLAY, mascotMode, mascotSide)
-      })
-    } else {
-      // Also resets any previous settle, here and in the overlay's own anchoring.
-      mascotWindow.setBounds({ x: ox, y: oy, width: MASCOT_W, height: MASCOT_H })
-      mascotSize = { width: MASCOT_W, height: MASCOT_H }
-      mascotWindow.show()
-      mascotWindow.webContents.send(IPC.MASCOT_PLAY, mascotMode, mascotSide)
     }
+    showMenu()
   })
+
+  ipcMain.on(IPC.MASCOT_SHOW, () => showMascot())
 
   ipcMain.on(IPC.MASCOT_HIDE, () => {
     // Destroyed (not hidden) to free the renderer between rare appearances; 'closed' nulls

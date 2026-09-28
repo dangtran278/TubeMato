@@ -43,11 +43,20 @@
         user-select: none;
         transform: scale(0);
         transform-origin: right center;
-        /* Rest nudge: up/down grow from an edge origin, which would otherwise leave the
-           settled mascot 42px above/below the widget center. This pulls it back so all
-           three modes settle in the exact same spot (next to the widget) as the default.
-           42px = (bandCenter 230 - edgeOrigin 80) * restScale 0.28. */
+        /* Rest nudge: up/down grow from an edge origin, which would otherwise leave the settled
+           mascot (bandCenter 230 - edgeOrigin 80 = 150px) * --rest-scale off center - this pulls
+           all three modes back to the same rest spot as the default. */
         --settle-y: 0px;
+      }
+
+      /* Jumpscare stays full size - only the resting size follows the widget, since that's what
+         sits beside the pill until dismissed (84px next to a 38px compact pill reads as a
+         mismatch, not a pet). Set from the widget size the main process passes with each play. */
+      :root {
+        --rest-scale: 0.28;
+      }
+      :root[data-size="compact"] {
+        --rest-scale: 0.2;
       }
 
       /* Vertical growth direction (chosen by the main process from widget position).
@@ -60,11 +69,11 @@
       } /* grow both ways */
       #mascot.mode-down {
         transform-origin: right top;
-        --settle-y: -42px;
+        --settle-y: calc(-150px * var(--rest-scale));
       } /* near top → grow down */
       #mascot.mode-up {
         transform-origin: right bottom;
-        --settle-y: 42px;
+        --settle-y: calc(150px * var(--rest-scale));
       } /* near bottom → grow up */
 
       #mascot.jumpscare {
@@ -97,7 +106,7 @@
         /* Settled: ~widget height, nudged left so the glow clears the widget, and
            --settle-y so up/down land at the same resting spot as center. */
         100% {
-          transform: translate(-9px, var(--settle-y)) scale(0.28) rotate(0deg);
+          transform: translate(-9px, var(--settle-y)) scale(var(--rest-scale)) rotate(0deg);
         }
       }
     </style>
@@ -118,7 +127,10 @@
       // mode: 'center' | 'up' | 'down' : set by the main process from the widget's
       // position so the jumpscare grows away from the nearest screen edge.
       // side: 'left' | 'right' : which side of the widget the mascot appears on.
-      function play(mode, side) {
+      function play(mode, side, size) {
+        // Drives --rest-scale, so the mascot settles to a size that matches the widget it
+        // parks against. Every replay carries it, including applyWidgetSize's after a switch.
+        document.documentElement.dataset.size = size || "normal";
         // Main has already resized the window back to full; drop the anchoring settle() applied.
         settled = false;
         wrap.style.right = "";
@@ -136,7 +148,7 @@
       // Reports the settled art's box so main can shrink the window onto it.
       function settle() {
         if (settled) return;
-        const art = mascot.getBoundingClientRect(); // reflects the settled scale(0.28)
+        const art = mascot.getBoundingClientRect(); // reflects the settled --rest-scale
         if (art.width <= 0 || art.height <= 0) return;
         settled = true;
 

@@ -34,4 +34,10 @@ describe('formatTime', () => {
   it('fractional seconds are truncated (floor), not rounded', () => {
     expect(formatTime(Math.floor(61.9))).toBe('01:01')
   })
+
+  it('999:59 is the last value that moves; past it the display holds', () => {
+    expect(formatTime(999 * 60 + 59)).toBe('999:59')
+    expect(formatTime(999 * 60 + 60)).toBe('999:59')
+    expect(formatTime(10 * 24 * 3600)).toBe('999:59')
+  })
 })

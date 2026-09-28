@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from './types'
-import type { TimerSession, Objective, ObjectiveLog, Settings, DaySummary, ObjectiveReminderPayload, PomodoroSessionRecord, ProcrastinationEvent, BellType, MascotMode, MascotSide, ScheduleSlot, FiveYearGoal, AppNotification } from './types'
+import type { TimerSession, Objective, ObjectiveLog, Settings, DaySummary, ObjectiveReminderPayload, PomodoroSessionRecord, ProcrastinationEvent, BellType, MascotMode, MascotSide, WidgetSize, ScheduleSlot, FiveYearGoal, AppNotification } from './types'
 
 ipcRenderer.on(IPC.SUMMARY_SHOW, (_e, summary: DaySummary) => {
   window.dispatchEvent(new CustomEvent(IPC.SUMMARY_SHOW, { detail: summary }))
@@ -129,8 +129,9 @@ contextBridge.exposeInMainWorld('tubemato', {
 
   // ─── Mascot overlay ────────────────────────────────────────────────────────
   mascot: {
-    onPlay: (cb: (mode: MascotMode, side: MascotSide) => void) => {
-      const handler = (_: Electron.IpcRendererEvent, mode: MascotMode, side: MascotSide) => cb(mode, side)
+    onPlay: (cb: (mode: MascotMode, side: MascotSide, size: WidgetSize) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, mode: MascotMode, side: MascotSide, size: WidgetSize) =>
+        cb(mode, side, size)
       ipcRenderer.on(IPC.MASCOT_PLAY, handler)
       return () => ipcRenderer.off(IPC.MASCOT_PLAY, handler)
     },

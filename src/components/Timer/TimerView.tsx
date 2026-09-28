@@ -206,13 +206,6 @@ export default function TimerView() {
 
   const progress = session.totalSeconds > 0 ? session.secondsLeft / session.totalSeconds : 0
 
-  const overdueFmt = (() => {
-    const sec = session.procrastinationSeconds
-    const m = Math.floor(sec / 60)
-    const s = sec % 60
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  })()
-
   return (
     <div className="timer-view timer-view--centered">
 
@@ -241,7 +234,7 @@ export default function TimerView() {
             </div>
           ) : session.state === 'procrastinating' ? (
             <div className="timer-countdown timer-countdown--alert timer-countdown--mono">
-              {overdueFmt}
+              {formatTime(session.procrastinationSeconds)}
             </div>
           ) : (
             <div className="timer-countdown" style={{ fontFamily: 'var(--font-mono)' }}>

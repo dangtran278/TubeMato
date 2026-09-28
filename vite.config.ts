@@ -11,6 +11,16 @@ export default defineConfig({
     electron([
       {
         entry: 'electron/main.ts',
+        // `npm run dev:test` sets TUBEMATO_USER_DATA_DIR to a throwaway profile. Passing it
+        // through as Chromium's --user-data-dir moves app.getPath('userData'), so a dev run
+        // reads and writes that copy instead of the profile you actually use. Unset, this is
+        // exactly the plugin's own default startup - plain `npm run dev` is unchanged.
+        onstart({ startup }) {
+          const profile = process.env.TUBEMATO_USER_DATA_DIR
+          const argv = ['.', '--no-sandbox']
+          if (profile) argv.push(`--user-data-dir=${profile}`)
+          startup(argv)
+        },
         vite: {
           build: {
             outDir: 'dist-electron',

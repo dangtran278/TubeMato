@@ -159,6 +159,28 @@ export default function SettingsView() {
           </Row>
         </Section>
 
+        <Section title="📌 Widget">
+          <Row label="Widget size" hint="Compact shows only the timer and play. Skip and +1 move to the widget's right-click menu.">
+            <CenterSelect className="settings-cselect-narrow" ariaLabel="Widget size" value={local.widgetSize ?? 'normal'}
+              onChange={v => patch({ widgetSize: v as 'normal' | 'compact' })}
+              options={[
+                { value: 'normal', label: 'Normal' },
+                { value: 'compact', label: 'Compact' },
+              ]} />
+          </Row>
+          <Row label="Widget click opens" hint="Which view opens when you click the floating widget.">
+            <CenterSelect className="settings-cselect-narrow" ariaLabel="Widget click opens" value={local.widgetClickTab ?? 'timer'}
+              onChange={v => patch({ widgetClickTab: v as 'timer' | 'objectives' | 'fiveyear' | 'schedule' | 'analytics' })}
+              options={[
+                { value: 'timer', label: 'Timer' },
+                { value: 'objectives', label: 'Objectives' },
+                { value: 'schedule', label: 'Calendar' },
+                { value: 'fiveyear', label: 'Five-Year Plan' },
+                { value: 'analytics', label: 'Analytics' },
+              ]} />
+          </Row>
+        </Section>
+
         <Section title="⏳ Timer">
           <Row label="Work duration" hint="Duration of each focus block, in seconds.">
             <NumInput value={local.workDuration} min={1} max={MAX_TIMER_DURATION_S} onChange={v => patch({ workDuration: v })} />
@@ -381,17 +403,6 @@ export default function SettingsView() {
         </Section>
 
         <Section title="🖥 System">
-          <Row label="Widget click opens" hint="Which view opens when you click the floating widget timer.">
-            <CenterSelect className="settings-cselect-narrow" ariaLabel="Widget click opens" value={local.widgetClickTab ?? 'timer'}
-              onChange={v => patch({ widgetClickTab: v as 'timer' | 'objectives' | 'fiveyear' | 'schedule' | 'analytics' })}
-              options={[
-                { value: 'timer', label: 'Timer' },
-                { value: 'objectives', label: 'Objectives' },
-                { value: 'schedule', label: 'Calendar' },
-                { value: 'fiveyear', label: 'Five-Year Plan' },
-                { value: 'analytics', label: 'Analytics' },
-              ]} />
-          </Row>
           <Row label="Launch at startup" hint={hint(
             'Starts TubeMato when the system boots.',
             'Starts with the system. We will be here waiting.',

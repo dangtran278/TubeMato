@@ -44,6 +44,10 @@ export type Personality = 'passive-aggressive' | 'calm'
 /** How a reminder/summary is delivered. 'in-app' = popup only; 'both' = popup + desktop toast. */
 export type NotifyMode = 'off' | 'in-app' | 'both'
 
+/** Floating widget form. 'compact' drops the state label and the skip/+1 buttons, which move to
+ *  the widget's right-click menu. */
+export type WidgetSize = 'normal' | 'compact'
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 export interface Settings {
@@ -73,6 +77,7 @@ export interface Settings {
   /** Restore the main window maximized if it was maximized when last used. */
   mainWindowMaximized: boolean
   showMiniWidget: boolean
+  widgetSize: WidgetSize
   streakThreshold: number         // pomodoros/day to count as streak day
   /** Weekends can break a streak like any other day. Off: a rested Sat/Sun is skipped, so Friday's
    *  run carries into Monday. A worked weekend always counts either way. */
@@ -156,6 +161,7 @@ export const DEFAULT_SETTINGS: Settings = {
   miniWidgetPosition: { x: -99999, y: -99999 },
   mainWindowMaximized: false,
   showMiniWidget: true,
+  widgetSize: 'normal',
   streakThreshold: 4,
   streakCountsWeekends: false,
   carryDebt: true,

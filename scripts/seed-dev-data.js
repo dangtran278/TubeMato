@@ -2,31 +2,13 @@
 /**
  * Dev seed: wipes existing focus history and writes placeholder logs + objectives.
  * Runs in plain Node, so it locates the app's userData dir on disk itself.
- *   npm run seed
+ *   npm run seed              # seeds the real profile
+ *   npm run seed:test         # seeds the throwaway test profile instead
  */
 const fs = require("fs");
 const path = require("path");
-
-// ─── locate the app's userData dir ────────────────────────────────────────────
-function resolveUserData() {
-  const appData =
-    process.env.APPDATA ||
-    path.join(process.env.USERPROFILE || process.env.HOME || ".", "AppData", "Roaming");
-  const prefer = ["TubeMato", "Electron", "tubemato"];
-  for (const name of prefer) {
-    const dir = path.join(appData, name);
-    if (fs.existsSync(path.join(dir, "tubemato.json")) || fs.existsSync(path.join(dir, "logs")))
-      return dir;
-  }
-  try {
-    for (const name of fs.readdirSync(appData)) {
-      if (fs.existsSync(path.join(appData, name, "tubemato.json"))) return path.join(appData, name);
-    }
-  } catch {
-    /* ignore */
-  }
-  return path.join(appData, "TubeMato"); // default if the app has never run
-}
+// Honours TUBEMATO_USER_DATA_DIR, so `npm run dev:test` can seed an isolated profile.
+const { resolveUserData } = require("./user-data-dir");
 
 // ─── tiny deterministic RNG so re-seeding is reproducible ─────────────────────
 let _seed = 0x1234abcd;
