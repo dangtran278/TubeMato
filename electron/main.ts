@@ -162,8 +162,7 @@ const timer = new TimerEngine({
       actionLabel: 'Start',
       bodyAction: 'open-timer',
       iconDataUrl: mascotDataUrl(),
-    })
-    ringBell(personality === 'calm' ? 'overdue-start' : 'overdue-nudge')
+    }, personality === 'calm' ? 'overdue-start' : 'overdue-nudge')
   },
 })
 
@@ -1206,7 +1205,10 @@ function startTimerBroadcast() {
   syncTimerObserved()
   timer.onTick = session => {
     if (activeProcrastinationNotifId && session.state !== 'procrastinating') {
-      notificationsWindow?.webContents.send(IPC.NOTIFY_DISMISS, activeProcrastinationNotifId)
+      const id = activeProcrastinationNotifId
+      // A card still queued behind the loading overlay would miss the dismiss and get stuck.
+      notifyPending = notifyPending.filter(p => p.card.id !== id)
+      notificationsWindow?.webContents.send(IPC.NOTIFY_DISMISS, id)
       activeProcrastinationNotifId = null
     }
     // Don't wake hidden renderers every second; they re-sync via the show/restore handlers.
