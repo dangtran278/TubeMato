@@ -74,6 +74,14 @@ export const store = new Store<StoreSchema>({
   },
 })
 
+// Migrate the legacy closeButtonQuits toggle. Must run before the backfill below, which would fill in
+// 'ask' and drop an existing Quit.
+const legacySettings = store.get('settings') as Settings & { closeButtonQuits?: boolean }
+if ('closeButtonQuits' in legacySettings) {
+  const { closeButtonQuits, ...rest } = legacySettings
+  store.set('settings', { ...rest, closeButtonAction: rest.closeButtonAction ?? (closeButtonQuits ? 'quit' : 'ask') })
+}
+
 // `defaults` only fills keys absent from the whole object, so settings saved by an older version
 // keep reading `undefined` for every key added since. Backfill once so every read sees them all.
 const storedSettings = store.get('settings')

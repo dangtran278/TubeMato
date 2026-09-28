@@ -1795,10 +1795,10 @@ function registerIPC() {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize()
     else mainWindow?.maximize()
   })
-  // Titlebar ✕ → quit entirely, or destroy the window so the app lives on in the
-  // tray (default; widget keeps handling bells). Controlled by the close-button setting.
+  // Titlebar ✕ → quit entirely, or destroy the window so the app lives on in the tray (widget
+  // keeps handling bells). 'ask' never reaches here: the renderer's close dialog handles it.
   ipcMain.on(IPC.APP_CLOSE, () => {
-    if (store.get('settings').closeButtonQuits) quitApp()
+    if (store.get('settings').closeButtonAction === 'quit') quitApp()
     else mainWindow?.close()
   })
   ipcMain.on(IPC.APP_SHOW_MAIN, () => ensureMainWindow())

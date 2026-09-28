@@ -879,3 +879,16 @@ export function fiveYearSubtitle(seed: string, personality: Personality = 'passi
   ]
   return stablePick(items, `fiveyear-subtitle-${seed}`)
 }
+
+// ─── Close dialog ────────────────────────────────────────────────────────────
+
+/** Title-bar ✕ with the Close button setting on Ask. */
+export function closeDialogTitle(personality: Personality = 'passive-aggressive'): string {
+  if (personality === 'calm') return `Keep TubeMato running?`
+  return `Leaving, or escaping?`
+}
+
+export function closeDialogBody(personality: Personality = 'passive-aggressive'): string {
+  if (personality === 'calm') return `Reminders and alerts only work while TubeMato is running.`
+  return `Quitting stops the reminders. Not the deadlines.`
+}

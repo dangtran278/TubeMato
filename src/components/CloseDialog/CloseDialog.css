@@ -1,0 +1,35 @@
+/* Shell, title, body and buttons come from the group-delete dialog (Objectives.css). */
+/* Wider so the hint and all three buttons fit on one row. */
+.group-delete-modal.close-dialog__modal { width: min(38rem, calc(100vw - 2rem)); }
+
+.close-dialog__footer {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+.close-dialog__actions { margin-top: 0; }
+
+.close-dialog__dont-ask-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.close-dialog__dont-ask {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.close-dialog__dont-ask input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.close-dialog__hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}

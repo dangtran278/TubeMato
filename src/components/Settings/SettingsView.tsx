@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { useSettingsStore } from '../../store'
-import type { Settings, LogRollPeriod, NotifyMode } from '@electron/types'
+import type { Settings, LogRollPeriod, NotifyMode, CloseButtonAction } from '@electron/types'
 import { MAX_TIMER_DURATION_S, MAX_POMODOROS_BEFORE_LONG_BREAK, MAX_DAY_COUNT } from '@electron/types'
 import { calendarDateKey, resolveTimeZone, timeZoneUtcOffsetLabel } from '@electron/calendarDate'
 import { settingsSubtitle } from '@electron/personalityCopy'
@@ -409,11 +409,17 @@ export default function SettingsView() {
           )}>
             <Toggle value={local.autoLaunch} onChange={v => patch({ autoLaunch: v })} />
           </Row>
-          <Row label="Quit on close" hint={hint(
-            'When off, closing minimizes to the system tray instead of quitting.',
-            'When off, closing minimizes to the system tray so TubeMato can keep judging you in the background.',
+          <Row label="Close button" hint={hint(
+            'What happens when you click the window\'s ✕.',
+            'What the window\'s ✕ does. Planning your escape in advance, I see.',
           )}>
-            <Toggle value={local.closeButtonQuits ?? false} onChange={v => patch({ closeButtonQuits: v })} />
+            <CenterSelect className="settings-cselect" ariaLabel="Close button" value={local.closeButtonAction ?? 'ask'}
+              onChange={v => patch({ closeButtonAction: v as CloseButtonAction })}
+              options={[
+                { value: 'ask', label: 'Ask' },
+                { value: 'tray', label: 'Keep running in tray' },
+                { value: 'quit', label: 'Quit' },
+              ]} />
           </Row>
         </Section>
 

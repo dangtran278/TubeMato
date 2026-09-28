@@ -48,6 +48,10 @@ export type NotifyMode = 'off' | 'in-app' | 'both'
  *  the widget's right-click menu. */
 export type WidgetSize = 'normal' | 'compact'
 
+/** Title-bar ✕: 'ask' shows the close dialog, 'tray' destroys the window and keeps running in the
+ *  tray, 'quit' exits the app. */
+export type CloseButtonAction = 'ask' | 'tray' | 'quit'
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 export interface Settings {
@@ -97,8 +101,8 @@ export interface Settings {
   ytPlayOnWork: boolean
   /** Keep YouTube music playing during breaks (no auto-pause). */
   ytPlayOnBreak: boolean
-  /** Title-bar ✕ quits the app instead of minimizing to the tray. */
-  closeButtonQuits: boolean
+  /** What the title-bar ✕ does. */
+  closeButtonAction: CloseButtonAction
   /** Suppress the browser-extension install guide on startup (set via its "don't show again"). */
   hideExtensionGuide: boolean
   /** Which main-window tab the mini-widget timer opens when clicked. */
@@ -173,7 +177,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ytVolume: 100,
   ytPlayOnWork: true,
   ytPlayOnBreak: false,
-  closeButtonQuits: false,
+  closeButtonAction: 'ask',
   hideExtensionGuide: false,
   widgetClickTab: 'timer',
   theme: 'dark',

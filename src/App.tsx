@@ -7,6 +7,7 @@ import FiveYearView from './components/FiveYear/FiveYearView'
 import AnalyticsView, { SummaryModal } from './components/Analytics/AnalyticsView'
 import SettingsView from './components/Settings/SettingsView'
 import ExtensionGuide from './components/ExtensionGuide/ExtensionGuide'
+import CloseDialog from './components/CloseDialog/CloseDialog'
 import { aboutMessage, aboutLadder } from '@electron/personalityCopy'
 import { IPC } from '@electron/types'
 import type { ObjectiveReminderPayload, DaySummary } from '@electron/types'
@@ -189,7 +190,11 @@ export default function App() {
 
   function minimize() { window.tubemato.app.minimize() }
   function toggleMaximize() { window.tubemato.app.maximize() }
-  function closeToTray() { window.tubemato.app.close() }
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
+  function closeWindow() {
+    if ((settings.closeButtonAction ?? 'ask') === 'ask') setShowCloseDialog(true)
+    else window.tubemato.app.close()
+  }
   function toggleWidget() { window.tubemato.widget.toggle() }
 
   // DEBUG: manual triggers for the reminder/summary popups (+ their overlay notification cards).
@@ -213,8 +218,8 @@ export default function App() {
           </button>
           <button
             className="titlebar__btn titlebar__btn--close"
-            onClick={closeToTray}
-            title={settings.closeButtonQuits ? 'Quit TubeMato' : 'Close to tray'}
+            onClick={closeWindow}
+            title={settings.closeButtonAction === 'quit' ? 'Quit TubeMato' : settings.closeButtonAction === 'tray' ? 'Close to tray' : 'Close'}
           >✕</button>
         </div>
       </div>
@@ -264,6 +269,7 @@ export default function App() {
         {view === 'settings' && <SettingsView />}
       </div>
       {showExtGuide && <ExtensionGuide onClose={() => setShowExtGuide(false)} />}
+      {showCloseDialog && <CloseDialog personality={settings.personality} onCancel={() => setShowCloseDialog(false)} />}
       {activePopup === 'summary' && <SummaryModal summary={summary!} onClose={dismissSummary} />}
       {activePopup === 'reminder' && (
         <ObjectiveReminderModal
