@@ -110,6 +110,7 @@ interface TubematoAPI {
     getInitialMaximized: () => boolean
     onNavigate: (cb: (view: string) => void) => UnsubFn
     onWindowState: (cb: (maximized: boolean) => void) => UnsubFn
+    onCloseRequest: (cb: () => void) => UnsubFn
     getBridgeExtensionPath: () => Promise<string | null>
     openBridgeExtensionFolder: () => Promise<{ ok: true } | { ok: false; error: string }>
     getBridgeStatus: () => Promise<{ server: boolean; extensionOk: boolean }>

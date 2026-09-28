@@ -195,6 +195,8 @@ export default function App() {
     if ((settings.closeButtonAction ?? 'ask') === 'ask') setShowCloseDialog(true)
     else window.tubemato.app.close()
   }
+  // Alt+F4 and other native closes while the setting is Ask; main already handled Tray and Quit.
+  useEffect(() => window.tubemato.app.onCloseRequest(() => setShowCloseDialog(true)), [])
   function toggleWidget() { window.tubemato.widget.toggle() }
 
   // DEBUG: manual triggers for the reminder/summary popups (+ their overlay notification cards).

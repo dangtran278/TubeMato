@@ -162,6 +162,11 @@ contextBridge.exposeInMainWorld('tubemato', {
       ipcRenderer.on(IPC.WINDOW_STATE, handler)
       return () => ipcRenderer.off(IPC.WINDOW_STATE, handler)
     },
+    onCloseRequest: (cb: () => void) => {
+      const handler = () => cb()
+      ipcRenderer.on(IPC.APP_CLOSE_REQUEST, handler)
+      return () => ipcRenderer.off(IPC.APP_CLOSE_REQUEST, handler)
+    },
     getBridgeExtensionPath: (): Promise<string | null> =>
       ipcRenderer.invoke(IPC.BRIDGE_EXTENSION_PATH),
     openBridgeExtensionFolder: (): Promise<{ ok: true } | { ok: false; error: string }> =>

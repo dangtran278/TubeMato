@@ -137,6 +137,8 @@ let pendingNav: string | null = null
 // True once quit begins, so window 'closed'/'close' handlers don't recreate the
 // widget or block teardown while app.exit() tears every window down.
 let isQuitting = false
+// Set by APP_CLOSE, which already applied the Close button setting, so the close handler skips it.
+let mainWindowCloseApproved = false
 // The extension install guide auto-shows once per launch. Tracked here (not in the
 // renderer) so reopening the window from the tray/widget doesn't show it again.
 let extensionGuideShown = false
@@ -328,6 +330,23 @@ function createMainWindow() {
     // Before show, so it never flashes at its restored size first.
     if (store.get('settings').mainWindowMaximized) mainWindow?.maximize()
     mainWindow?.show()
+  })
+
+  // Native closes (Alt+F4, taskbar, Ctrl/Cmd+W) follow the Close button setting like the titlebar ✕.
+  mainWindow.on('close', e => {
+    if (isQuitting || mainWindowCloseApproved) {
+      mainWindowCloseApproved = false
+      return
+    }
+    const action = store.get('settings').closeButtonAction ?? 'ask'
+    if (action === 'tray') return
+    e.preventDefault()
+    if (action === 'quit') quitApp()
+    else {
+      // Taskbar "Close window" works on a minimized window; bring it up so the dialog is seen.
+      ensureMainWindow()
+      mainWindow?.webContents.send(IPC.APP_CLOSE_REQUEST)
+    }
   })
 
   // Destroyed (not hidden) to free its ~100 MB renderer; the widget keeps playing timer sounds
@@ -1799,7 +1818,10 @@ function registerIPC() {
   // keeps handling bells). 'ask' never reaches here: the renderer's close dialog handles it.
   ipcMain.on(IPC.APP_CLOSE, () => {
     if (store.get('settings').closeButtonAction === 'quit') quitApp()
-    else mainWindow?.close()
+    else if (mainWindow) {
+      mainWindowCloseApproved = true
+      mainWindow.close()
+    }
   })
   ipcMain.on(IPC.APP_SHOW_MAIN, () => ensureMainWindow())
   // Auto-show the install guide at most once per launch (and never if dismissed for good).

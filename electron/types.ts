@@ -557,6 +557,8 @@ export const IPC = {
   APP_SHOW_MAIN_AT: 'app:show-main-at',
   APP_GET_INITIAL_NAV: 'app:get-initial-nav',
   APP_CLOSE: 'app:close',
+  /** Main → renderer: a native close (Alt+F4 etc.) hit the Ask setting; show the close dialog. */
+  APP_CLOSE_REQUEST: 'app:close-request',
   APP_SHOW_MAIN: 'app:show-main',
   /** Returns true at most once per app launch (honors hideExtensionGuide) for the install guide. */
   EXT_GUIDE_CONSUME: 'ext-guide:consume',
