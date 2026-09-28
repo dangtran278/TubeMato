@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.2.0] - 2026-09-28
+
+### Added
+
+- Closing the window asks whether to keep running in the tray or quit. Set in Settings › System, replacing "Quit on close".
+- Overdue notification has a Start button.
+- Compact widget size (timer and play only). Toggle in Settings › Widget.
+
+### Changed
+
+- Overdue notification stays until overdue ends, instead of timing out.
+- Overdue notification plays a three-burst alarm in passive-aggressive mode.
+- Floating widget is shorter.
+- Clicking anywhere on the widget outside its buttons opens the main window, not just the timer.
+- Procrastination nudge can't be set shorter than the grace period.
+
+### Fixed
+
+- Dragging the widget grew its window, leaving an invisible area that swallowed clicks.
+- Overdue mascot window stayed full size after settling, swallowing clicks around it.
+- Widget right-click menu left no active window, so keystrokes went nowhere.
+- Checking in an owed objective could reorder rows mid-click.
+- Extended work sessions counted as a single pomodoro.
+- Clicked buttons kept focus, so Enter or Space pressed them again.
+- Esc in a form's dropdown also closed the form.
+- Switching objectives mid-session kept the old objective's music setting.
+- Default browser shortcuts (zoom, DevTools, Tab through buttons) still worked.
+- Tray and widget objective switcher ignored debt when sorting.
+- Overdue mascot could be dragged off and saved as an image.
+
 ## [1.1.0] - 2026-08-19
 
 ### Added
@@ -41,6 +71,7 @@
 
 Initial release.
 
+[1.2.0]: https://github.com/dangtran278/TubeMato/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/dangtran278/TubeMato/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/dangtran278/TubeMato/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dangtran278/TubeMato/releases/tag/v1.0.0
