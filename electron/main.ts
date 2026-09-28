@@ -1185,8 +1185,12 @@ function trayPrimaryIcon(session: TimerSession): MenuIconName {
 
 /** Effective play decision for the active objective's current phase (override → global). */
 function musicPlayFor(phase: 'work' | 'break'): boolean {
+  return musicPlayForObjective(phase, timer.getSession().activeObjectiveId)
+}
+
+/** Same decision for a given objective; no id means the global setting. */
+function musicPlayForObjective(phase: 'work' | 'break', id: string | undefined): boolean {
   const s = store.get('settings')
-  const id = timer.getSession().activeObjectiveId
   const obj = id ? store.get('objectives').find((o: Objective) => o.id === id && !o.archived) : undefined
   return phase === 'work' ? playOnWork(s, obj) : playOnBreak(s, obj)
 }
@@ -1253,9 +1257,11 @@ function startTimerBroadcast() {
     music.onWorkStart(play)
   }
 
-  timer.onObjectiveSwitch = session => {
+  timer.onObjectiveSwitch = (session, previousObjectiveId) => {
     const phase = session.state === 'running' ? 'work' : 'break'
     const play = musicPlayFor(phase)
+    // Same rule as the outgoing objective. Re-applying would undo a fade-out or a manual pause.
+    if (play === musicPlayForObjective(phase, previousObjectiveId)) return
     bridgeLog('objective switched mid-phase, phase=', phase, 'play=', play)
     if (phase === 'work') music.onWorkStart(play)
     else music.onBreakStart(play)

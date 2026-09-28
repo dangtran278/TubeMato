@@ -72,8 +72,9 @@ export class TimerEngine {
    */
   public onPreBreakCanceled: () => void = () => {}
   /** Fires on an objective change during live work/break, so music re-applies without waiting for
-   *  the next phase boundary. Skipped for idle/paused/grace, which aren't music-playing states. */
-  public onObjectiveSwitch: (session: TimerSession) => void = () => {}
+   *  the next phase boundary. Skipped for idle/paused/grace, which aren't music-playing states.
+   *  `previousObjectiveId` lets the listener skip a switch whose music rule doesn't change. */
+  public onObjectiveSwitch: (session: TimerSession, previousObjectiveId?: string) => void = () => {}
 
   private fadeTriggered = false
 
@@ -314,6 +315,7 @@ export class TimerEngine {
 
   setActiveObjective(objectiveId?: string) {
     if (this.session.activeObjectiveId === objectiveId) return
+    const previousObjectiveId = this.session.activeObjectiveId
     // Mid-block switch: bank the time spent on the outgoing objective as a segment, then
     // continue the SAME countdown for the new one (the focus block is not reset).
     if (this.session.state === 'running' || this.session.state === 'paused') {
@@ -326,7 +328,7 @@ export class TimerEngine {
     const session = this.getSession()
     this.onTick(session)
     const isLiveBreak = (session.state === 'break-short' || session.state === 'break-long') && !session.isBreakPaused
-    if (session.state === 'running' || isLiveBreak) this.onObjectiveSwitch(session)
+    if (session.state === 'running' || isLiveBreak) this.onObjectiveSwitch(session, previousObjectiveId)
   }
 
   /**
