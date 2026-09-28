@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useSettingsStore } from '../store'
-import { synthBell, synthGraceAlert, synthOverdueAlert, synthScheduleAlert, synthNotifyAlert } from '../utils/audioSynth'
+import { synthBell, synthGraceAlert, synthOverdueAlert, synthOverdueNudge, synthScheduleAlert, synthNotifyAlert } from '../utils/audioSynth'
 import { getAudioContext as getCtx } from '../utils/audioContext'
 
 export function useAudio() {
@@ -18,6 +18,10 @@ export function useAudio() {
     synthOverdueAlert(getCtx(), (settings.overdueVolume ?? 70) / 100)
   }, [settings.overdueVolume])
 
+  const playOverdueNudge = useCallback(() => {
+    synthOverdueNudge(getCtx(), (settings.overdueVolume ?? 70) / 100)
+  }, [settings.overdueVolume])
+
   const playScheduleAlert = useCallback(() => {
     synthScheduleAlert(getCtx(), (settings.scheduleAlertVolume ?? 100) / 100)
   }, [settings.scheduleAlertVolume])
@@ -26,5 +30,5 @@ export function useAudio() {
     synthNotifyAlert(getCtx(), (settings.notifyVolume ?? 100) / 100)
   }, [settings.notifyVolume])
 
-  return { playBell, playGraceAlert, playOverdueAlert, playScheduleAlert, playNotifyAlert }
+  return { playBell, playGraceAlert, playOverdueAlert, playOverdueNudge, playScheduleAlert, playNotifyAlert }
 }

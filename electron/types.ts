@@ -572,4 +572,5 @@ export const IPC = {
   YT_SELECT_TAB: 'yt:select-tab',
 } as const
 
-export type BellType = 'work-start' | 'break-start' | 'grace-start' | 'overdue-start' | 'schedule-alert' | 'notify-alert'
+// 'overdue-nudge' = the overdue notification card's alarm (passive-aggressive; calm rings 'overdue-start').
+export type BellType = 'work-start' | 'break-start' | 'grace-start' | 'overdue-start' | 'overdue-nudge' | 'schedule-alert' | 'notify-alert'

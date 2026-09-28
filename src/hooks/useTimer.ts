@@ -7,11 +7,12 @@ export function useTimerEvents() {
   // Read the setter off the store instead of subscribing to it. This hook is mounted in App, so a
   // store subscription here would re-render the whole tree every tick just to hand back a setter.
   const setSession = useTimerStore.getState().setSession
-  const { playBell, playGraceAlert, playOverdueAlert, playScheduleAlert, playNotifyAlert } = useAudio()
+  const { playBell, playGraceAlert, playOverdueAlert, playOverdueNudge, playScheduleAlert, playNotifyAlert } = useAudio()
 
   const playBellRef          = useRef(playBell)
   const playGraceAlertRef    = useRef(playGraceAlert)
   const playOverdueAlertRef  = useRef(playOverdueAlert)
+  const playOverdueNudgeRef  = useRef(playOverdueNudge)
   const playScheduleAlertRef = useRef(playScheduleAlert)
   const playNotifyAlertRef   = useRef(playNotifyAlert)
 
@@ -19,6 +20,7 @@ export function useTimerEvents() {
     playBellRef.current          = playBell
     playGraceAlertRef.current    = playGraceAlert
     playOverdueAlertRef.current  = playOverdueAlert
+    playOverdueNudgeRef.current  = playOverdueNudge
     playScheduleAlertRef.current = playScheduleAlert
     playNotifyAlertRef.current   = playNotifyAlert
   })
@@ -36,6 +38,9 @@ export function useTimerEvents() {
           break
         case 'overdue-start':
           playOverdueAlertRef.current()
+          break
+        case 'overdue-nudge':
+          playOverdueNudgeRef.current()
           break
         case 'schedule-alert':
           playScheduleAlertRef.current()

@@ -555,6 +555,7 @@
         if (type === "work-start" || type === "break-start") window._tmaudio.playBell(bellVol);
         else if (type === "grace-start") window._tmaudio.playGraceAlert(alertVol);
         else if (type === "overdue-start") window._tmaudio.playOverdueAlert(alertVol);
+        else if (type === "overdue-nudge") window._tmaudio.playOverdueNudge(alertVol);
         else if (type === "schedule-alert") window._tmaudio.playScheduleAlert(scheduleAlertVol);
         else if (type === "notify-alert") window._tmaudio.playNotifyAlert(notifyVol);
       });

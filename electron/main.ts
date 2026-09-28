@@ -161,7 +161,7 @@ const timer = new TimerEngine({
       bodyAction: 'open-timer',
       iconDataUrl: mascotDataUrl(),
     })
-    ringBell('overdue-start')
+    ringBell(personality === 'calm' ? 'overdue-start' : 'overdue-nudge')
   },
 })
 
